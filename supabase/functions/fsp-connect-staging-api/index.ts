@@ -1,3 +1,4 @@
+import {assessReply,sendGraphText,executeRestrictedReply} from './reply-core.mjs';
 import {resolveFspRoute} from './route.mjs';
 /**
  * FSP Connect 2.1 — staging-only operator API.
@@ -116,7 +117,81 @@ async function getApi(req:Request,path:string,op:any,url:URL):Promise<Response>{
   if(path==='/api/settings')return respond(200,{sending:false,bulk_broadcast:false,ai_auto_reply:false,automation:false,meta_connected:false,environment:'staging'});
   return fail(404,'Not found');
 }
+
+/** Stage B2: explicit manual reply; no sending until every independent staging gate is set. */
+async function postRestrictedReply(req:Request,conversationId:string,op:any):Promise<Response>{
+  if(!isUUID(conversationId))return fail(400,'Invalid conversation ID');
+  if(op.role==='viewer')return fail(403,'Read-only operator');
+  const enabled=Deno.env.get('FSP_META_SENDING_ENABLED')==='true';
+  if(!enabled)return fail(503,'WhatsApp sending is disabled');
+  const conf={
+    enabled,
+    phoneNumberId:Deno.env.get('FSP_META_PHONE_NUMBER_ID')??'',
+    token:Deno.env.get('FSP_META_ACCESS_TOKEN')??'',
+    allowRecipient:Deno.env.get('FSP_META_TEST_RECIPIENT')??''
+  };
+  const length=Number(req.headers.get('content-length')||0);
+  if(length>8192)return fail(413,'Request too large');
+  const raw=await req.text();
+  if(raw.length>8192)return fail(413,'Request too large');
+  let data:any;
+  try{data=JSON.parse(raw)}catch{return fail(400,'Invalid JSON')}
+  if(!data||typeof data!=='object'||Array.isArray(data))return fail(400,'Invalid body');
+  const conversation=await conversationById(op,conversationId);
+  if(!conversation)return fail(404,'Conversation not found');
+  const {data:contacts}=await rest('whatsapp_contacts',
+    '?select=wa_id&id=eq.'+escapeQuery(conversation.contact_id)+'&limit=1');
+  const recipient=(contacts as any[])?.[0]?.wa_id;
+  const {data:incoming}=await rest('whatsapp_messages',
+    '?select=provider_timestamp&conversation_id=eq.'+escapeQuery(conversationId)+
+    '&direction=eq.inbound&order=provider_timestamp.desc.nullslast&limit=1');
+  const lastInboundAt=(incoming as any[])?.[0]?.provider_timestamp;
+  const checked=assessReply({operator:op,conversation,recipient,lastInboundAt,
+    text:data.text,requestId:data.request_id,config:conf});
+  if(!checked.ok)return fail(checked.status,checked.error);
+  const reqId=checked.requestId;
+  const result=await executeRestrictedReply({
+    input:checked,
+    claim:async()=>{
+      try{
+        const r=await callSupabase<any[]>('/rest/v1/fsp_outbound_requests',{
+          method:'POST',body:{request_id:reqId,operator_id:op.user_id,
+            conversation_id:conversationId,state:'claimed'},prefer:'return=representation'});
+        return Array.isArray(r.data)&&r.data.length===1;
+      }catch(e){if(e instanceof Error && e.message.includes('(409)'))return false;throw e;}
+    },
+    send:async()=>await sendGraphText({phoneNumberId:conf.phoneNumberId,
+      recipient:checked.recipient,text:checked.text,token:conf.token}),
+    record:async(_input:any,messageId:string)=>{
+      await callSupabase('/rest/v1/whatsapp_messages',{method:'POST',
+        body:{conversation_id:conversationId,provider_message_id:messageId,
+          direction:'outbound',sender_type:'agent',message_type:'text',
+          body:checked.text,provider_status:'pending',
+          metadata:{provider:'meta',request_id:reqId}},
+        prefer:'return=minimal'});
+      await callSupabase('/rest/v1/fsp_outbound_requests?request_id=eq.'+escapeQuery(reqId),{
+        method:'PATCH',body:{state:'accepted',provider_message_id:messageId,
+          updated_at:new Date().toISOString()},prefer:'return=minimal'});
+      await callSupabase('/rest/v1/fsp_operator_audit',{method:'POST',
+        body:{operator_id:op.user_id,conversation_id:conversationId,
+          action:'send_text',details:{provider_message_id:messageId,request_id:reqId}},
+        prefer:'return=minimal'});
+    },
+    markFailure:async(_requestId:string,reason:string)=>{
+      const state=reason==='rejected'?'rejected':reason==='persist_failed'?'persist_failed':'unknown';
+      await callSupabase('/rest/v1/fsp_outbound_requests?request_id=eq.'+escapeQuery(reqId),{
+        method:'PATCH',body:{state,error_category:reason,updated_at:new Date().toISOString()},
+        prefer:'return=minimal'});
+    }
+  });
+  if(result.ok)return respond(200,{ok:true,message_id:result.messageId});
+  if(result.warning)return respond(202,{warning:result.warning});
+  return fail(result.status||503,result.error||'Unable to send');
+}
+
 async function postApi(req:Request,path:string,op:any):Promise<Response>{
+  const replyMatch=/^\/api\/conversations\/([0-9a-f-]+)\/reply$/i.exec(path);
+  if(replyMatch)return postRestrictedReply(req,replyMatch[1],op);
   const match=/^\/api\/conversations\/([0-9a-f-]+)\/actions$/.exec(path);
   if(!match)return fail(404,'Not found');
   const id=match[1];
