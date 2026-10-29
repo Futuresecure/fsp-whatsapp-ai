@@ -295,6 +295,20 @@ $('recoveryForm').addEventListener('submit',async(e)=>{e.preventDefault();try{
  $('recoveryForm').classList.add('hide');$('loginForm').classList.remove('hide');toast('Password updated. Sign in again.');clearSession();
  }catch(err){showAuth(err.message)}});
 $('signOutNav').onclick=signOut;$('signOutTop').onclick=signOut;
+window.addEventListener('storage',event=>{
+ if(event.key!==sessionName)return;
+ if(event.newValue===null && state.session){
+  clearSession();
+  showAuth('Signed out in another tab.');
+ }else if(event.newValue && state.session){
+  // Keep rotated access/refresh credentials synchronized between open tabs.
+  try{
+   const renewed=JSON.parse(event.newValue);
+   if(typeof renewed.access_token==='string' && typeof renewed.refresh_token==='string')
+    state.session=renewed;
+  }catch{}
+ }
+});
 $('menuBtn').onclick=()=>$('appScreen').classList.toggle('expanded');
 window.addEventListener('unhandledrejection',()=>toast('Request failed. Please refresh.'));
 (async function boot(){
