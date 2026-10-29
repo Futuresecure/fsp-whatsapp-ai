@@ -1,13 +1,15 @@
 {
-  "name": "fsp-connect-21-foundation-api",
+  "name": "fsp-connect-21-api",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "engines": {"node": ">=22"},
   "scripts": {
     "start": "node src/server.mjs",
+    "worker": "node src/worker-cli.mjs --once",
+    "worker:run": "node src/worker-cli.mjs",
     "test": "node --test test/*.test.mjs",
-    "check": "node --check src/server.mjs && node --check test/server.test.mjs"
+    "check": "node --check src/server.mjs && node --check src/events.mjs && node --check src/supabase.mjs && node --check src/operator.mjs && node --check src/worker.mjs && node --check src/auth-client.mjs && node --check src/worker-cli.mjs"
   },
-  "description": "Stage A foundation. No live send, no database writes."
+  "description": "Stage A3/A4 inbound-only WhatsApp processing; outbound sending disabled. No runtime dependencies."
 }
