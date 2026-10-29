@@ -5,6 +5,7 @@ on:
     branches: [dev]
     paths:
       - 'staging-web/**'
+      - 'index.html'
       - '.github/workflows/staging-pages.yml'
   workflow_dispatch:
 
@@ -31,10 +32,17 @@ jobs:
           ref: dev
       - name: Configure Pages (requires Settings → Pages → GitHub Actions)
         uses: actions/configure-pages@v5
+      - name: Package staging login with stable project paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p pages-staging-output/staging-web
+          cp staging-web/index.html staging-web/app.js staging-web/style.css pages-staging-output/staging-web/
+          cp index.html pages-staging-output/index.html
       - name: Upload only the staging frontend
         uses: actions/upload-pages-artifact@v4
         with:
-          path: staging-web
+          path: pages-staging-output
       - name: Deploy the staging website
         id: deployment
         uses: actions/deploy-pages@v4
