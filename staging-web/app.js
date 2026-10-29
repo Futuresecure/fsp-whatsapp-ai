@@ -328,5 +328,11 @@ window.addEventListener('unhandledrejection',()=>toast('Request failed. Please r
   if(stored){state.session=JSON.parse(stored);saveSession(state.session)}
   if(state.session){const me=await api('/api/me');state.operator=me;showApp();await navigate('Overview')}
   else showAuth();
- }catch{clearSession();showAuth()}
+ }catch(e){
+  const message=String(e?.message||'');
+  // Keep the remembered session when the network/backend is temporarily unavailable.
+  if(/session expired|session invalid|refresh token|invalid grant|sign in required|not authorised|not activated/i.test(message)){
+   clearSession();showAuth('Your session has ended. Sign in again.');
+  }else showAuth('Unable to reconnect. Check your connection, then refresh this page.');
+ }
 })();
