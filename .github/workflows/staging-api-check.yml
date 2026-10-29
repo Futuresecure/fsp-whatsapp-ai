@@ -1,0 +1,45 @@
+name: FSP Connect 2.1 Staging API Verification
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - 'tests/staging-routes.test.mjs'
+      - 'supabase/functions/fsp-connect-staging-api/**'
+      - '.github/workflows/staging-api-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test production route normalizer
+        run: node --test tests/staging-routes.test.mjs
+      - name: Check browser JavaScript syntax
+        run: node --check staging-web/app.js
+      - name: Verify staging API liveness (no credentials)
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://vzcpzhobtfwhurcsppdl.supabase.co/functions/v1/fsp-connect-staging-api"
+          CODE=$(curl -sS --max-time 20 -o /tmp/fsp-health.json -w '%{http_code}' "$URL?route=%2Fhealthz")
+          test "$CODE" = "200"
+          grep -q '"messaging":"disabled"' /tmp/fsp-health.json
+      - name: Verify protected route rejects unauthenticated requests
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://vzcpzhobtfwhurcsppdl.supabase.co/functions/v1/fsp-connect-staging-api"
+          CODE=$(curl -sS --max-time 20 -o /tmp/fsp-unauth.json -w '%{http_code}' "$URL?route=%2Fapi%2Fme")
+          test "$CODE" = "401"
+          grep -q '"error":"Authentication required"' /tmp/fsp-unauth.json
