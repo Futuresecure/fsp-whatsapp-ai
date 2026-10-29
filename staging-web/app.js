@@ -21,8 +21,8 @@ let toastTimer;
 function toast(msg){$('toast').textContent=msg;$('toast').classList.remove('hide');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.add('hide'),4000)}
 function showAuth(message=''){$('appScreen').classList.add('hide');$('loginScreen').classList.remove('hide');$('loginError').textContent=message;$('loginError').classList.toggle('hide',!message)}
 function showApp(){$('loginScreen').classList.add('hide');$('appScreen').classList.remove('hide');$('avatar').textContent=(state.operator?.name||'FSP').slice(0,2).toUpperCase()}
-function clearSession(){state.session=null;state.operator=null;state.summary=null;state.convs=[];state.contacts=[];state.chosen=null;state.messages=[];sessionStorage.removeItem(sessionName)}
-function saveSession(s){state.session=s;sessionStorage.setItem(sessionName,JSON.stringify(s))}
+function clearSession(){state.session=null;state.operator=null;state.summary=null;state.convs=[];state.contacts=[];state.chosen=null;state.messages=[];sessionStorage.removeItem(sessionName);localStorage.removeItem(sessionName)}
+function saveSession(s){state.session=s;localStorage.setItem(sessionName,JSON.stringify(s));sessionStorage.removeItem(sessionName)}
 async function authCall(path,method,body,bearer){
  const headers={'apikey':CONFIG.publishableKey,'content-type':'application/json'};
  if(bearer)headers.authorization='Bearer '+bearer;
@@ -277,7 +277,7 @@ window.addEventListener('unhandledrejection',()=>toast('Request failed. Please r
  }
  if(!$('recoveryForm').classList.contains('hide'))return;
  try{
-  const stored=sessionStorage.getItem(sessionName);if(stored)state.session=JSON.parse(stored);
+  const stored=localStorage.getItem(sessionName)||sessionStorage.getItem(sessionName);if(stored){state.session=JSON.parse(stored);if(!localStorage.getItem(sessionName))saveSession(state.session)}
   if(state.session){const me=await api('/api/me');state.operator=me;showApp();await navigate('Overview')}
   else showAuth();
  }catch{clearSession();showAuth()}
