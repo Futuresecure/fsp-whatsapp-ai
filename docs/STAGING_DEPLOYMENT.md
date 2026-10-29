@@ -23,7 +23,16 @@ ON CONFLICT (user_id) DO NOTHING;
 4. Subsequent roles: `manager`, `agent`, `viewer`. Never derive roles from user-editable metadata. Operator `active=false` immediately blocks backend access on subsequent requests.
 5. Configure Supabase Auth Redirect URLs for the eventual Vercel staging URL to enable password recovery. Never turn off authentication.
 
-## Vercel Frontend Deployment
+## Easiest existing-GitHub option: GitHub Pages (no new hosting account)
+
+- Workflow `.github/workflows/staging-pages.yml` deploys **only** `staging-web/` from the `dev` branch to GitHub Pages.
+- Repository owner must first enable GitHub Pages for this repository: GitHub → `fsp-whatsapp-ai` → Settings → Pages → Build and deployment → Source: **GitHub Actions**. This is a GitHub account setting; it is not enabled by committing a workflow.
+- Then open the Actions tab and run `FSP Connect 2.1 Staging Web (GitHub Pages)` via **Run workflow** (branch `dev`) if it does not run automatically. Verify the run succeeds before sharing the URL.
+- When enabled and deployed, GitHub Pages normally gives a repository-specific `github.io` HTTPS address, but **do not assert the address exists until Actions/Pages confirms it**.
+- This creates a new Pages site for the separate `fsp-whatsapp-ai` repository; the existing business website and CRM stay untouched.
+- If the repository is public, the Login page itself is public but all private messages still require server-side Supabase Auth + FSP operator access. Audit repository visibility before publishing source code.
+
+## Vercel Frontend Deployment (alternative)
 
 1. Connect the Vercel app, select **Import Git Repository** → `Futuresecure/fsp-whatsapp-ai`, **Root Directory** `staging-web`, **Production Branch** `dev` for staging project only (do not alter GitHub main).
 2. Framework Preset: `Other`; Build command: none; Output directory: `.` or default static; install command: none.
