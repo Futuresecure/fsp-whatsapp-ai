@@ -34,3 +34,11 @@ jobs:
           test "$CODE" = "200"
           grep -q '"mode":"inbound-only"' /tmp/fsp-stage-b-health.json
           grep -q '"sending":false' /tmp/fsp-stage-b-health.json
+      - name: Verify Meta webhook secrets are configured (never reveal token)
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://vzcpzhobtfwhurcsppdl.supabase.co/functions/v1/fsp-whatsapp-webhook?health=1"
+          CODE=$(curl --max-time 20 -fsS -o /tmp/fsp-stage-b-secret-readiness.json -w '%{http_code}' "$URL")
+          test "$CODE" = "200"
+          grep -q '"status":"ready"' /tmp/fsp-stage-b-secret-readiness.json
