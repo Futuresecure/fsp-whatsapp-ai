@@ -123,3 +123,38 @@ test('gateway verification uses auth user endpoint and does not trust raw JWT cl
  assert.ok(calls[0].url.endsWith('/auth/v1/user'));
  assert.equal(calls[0].opts.headers.authorization,'Bearer not-real-token');
 });
+
+
+test('signed invalid payload is rejected without database write',async()=>{
+ const g=makeGateway();await withServer(g,async base=>{
+  const bad=JSON.stringify({...fixture,entry:[{id:'123',changes:[{field:'messages',value:{messages:[{id:'invalid',from:'bad',type:'text'}]}}]}]});
+  assert.equal((await post(base,bad)).status,400);
+  assert.equal(g.calls.filter(c=>c.name==='fsp_enqueue_events').length,0);
+ });
+});
+
+test('oversized webhook is rejected before database persistence',async()=>{
+ const g=makeGateway();await withServer(g,async base=>{
+  const large=JSON.stringify({object:'whatsapp_business_account',data:'x'.repeat(512*1024)});
+  assert.equal((await post(base,large)).status,413);
+  assert.equal(g.calls.filter(c=>c.name==='fsp_enqueue_events').length,0);
+ });
+});
+
+test('read-only role cannot assign or pause AI',async()=>{
+ const g=makeGateway({role:'viewer'});
+ await withServer(g,async base=>{
+  for(const action of ['assign','pause_ai','note']) {
+    const resp=await fetch(base+'/api/conversations/'+id+'/actions',{method:'POST',headers:{Authorization:'Bearer valid'},body:JSON.stringify({action,operator_id:assigned,text:'Test'})});
+    assert.equal(resp.status,403);
+  }
+ });
+});
+
+test('new operator sees only assigned conversations',async()=>{
+ const g=makeGateway({role:'agent'});await withServer(g,async base=>{
+  const res=await fetch(base+'/api/conversations',{headers:{Authorization:'Bearer valid'}});
+  assert.equal(res.status,200);
+  assert.ok(g.calls.some(c=>c.name==='whatsapp_conversations'&&c.query.includes('assigned_to=eq.'+user)));
+ });
+});
