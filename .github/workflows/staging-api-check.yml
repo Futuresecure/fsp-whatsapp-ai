@@ -6,6 +6,7 @@ on:
     paths:
       - 'tests/staging-routes.test.mjs'
       - 'tests/stage-b-auto-read.test.mjs'
+      - 'tests/stage-b-auto-read-ui.test.mjs'
       - 'tests/stage-b3-meta-connection.test.mjs'
       - 'staging-web/app.js'
       - 'supabase/functions/fsp-connect-staging-api/**'
@@ -32,6 +33,8 @@ jobs:
         run: node --test tests/stage-b3-meta-connection.test.mjs
       - name: Test guarded Inbox automatic mark-as-read
         run: node --test tests/stage-b-auto-read.test.mjs
+      - name: Test Inbox opening in browser-like simulation
+        run: node --test tests/stage-b-auto-read-ui.test.mjs
       - name: Check browser JavaScript syntax
         run: node --check staging-web/app.js
       - name: Verify staging API liveness (no credentials)
