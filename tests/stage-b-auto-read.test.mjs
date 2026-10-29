@@ -6,7 +6,17 @@ const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const op = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const t = '2026-10-29T13:55:00.000Z';
 const now = Date.parse('2026-10-29T14:00:00Z');
-const build = (extra = {}) => buildAutoReadFilter({conversationId:id, observedLastMessageAt:t, observedUnreadCount:2, now, ...extra});
+const build = (extra = {}) => {
+  const args={conversationId:id,observedLastMessageAt:t,observedUnreadCount:2,now,...extra};
+  const result=buildAutoReadFilter(args);
+  if(result===null && Object.keys(extra).length===0){
+    console.error('Fixture diagnostic',JSON.stringify({
+      now, observed:Date.parse(t), idLength:id.length, idValid:/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id),
+      countValid:Number.isSafeInteger(args.observedUnreadCount),timestampType:typeof args.observedLastMessageAt
+    }));
+  }
+  return result;
+};
 
 test('valid snapshot includes equality guard for unread count and timestamp upper bound', () => {
   const f = build();
