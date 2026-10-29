@@ -63,8 +63,19 @@ async function api(path,method='GET',body){
 }
 async function login(email,password){
  const s=await authCall('token?grant_type=password','POST',{email,password});
- saveSession({...s,expires_at:Math.floor(Date.now()/1000)+Number(s.expires_in||3600)});
- try{const op=await api('/api/me');state.operator=op;showApp();await navigate('Overview')}catch(e){clearSession();showAuth(e.message==='Your account is not authorised for this action'?'Login succeeded but your operator account is not active. Ask the administrator to assign a role.':e.message)}
+ state.session={...s,expires_at:Math.floor(Date.now()/1000)+Number(s.expires_in||3600)};
+ try{
+  const op=await api('/api/me'); // verify active, authorized operator BEFORE persisting
+  state.operator=op;
+  const persisted=saveSession(state.session);
+  showApp();
+  await navigate('Overview');
+  if(!persisted)toast('Your browser blocks persistent storage. Login may be required after closing.');
+ }catch(e){
+  clearSession();
+  showAuth(e.message==='Your account is not authorised for this action'?
+    'Login succeeded but your operator account is not active. Ask the administrator to assign a role.':e.message);
+ }
 }
 async function signOut(){
  const current=state.session;
