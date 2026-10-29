@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+ <meta charset="utf-8" />
+ <meta name="viewport" content="width=device-width,initial-scale=1" />
+ <meta name="theme-color" content="#14263D" />
+ <title>FSP Connect 2.1 · Staging</title>
+ <meta name="description" content="Future Secure Providers — private operator messaging workspace" />
+ <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+ <div id="loginScreen" class="authwrap">
+   <section class="authcard" aria-labelledby="loginTitle">
+     <div class="authlogo">FSP<span>CONNECT 2.1</span></div>
+     <p class="stage-tag">SECURE STAGING WORKSPACE</p>
+     <h1 id="loginTitle">Welcome back</h1>
+     <p class="muted">Sign in with your approved FSP Connect operator account.</p>
+     <form id="loginForm" autocomplete="on">
+       <label for="loginEmail">Email address</label>
+       <input id="loginEmail" name="email" type="email" placeholder="operator@example.com" autocomplete="username" required />
+       <label for="loginPassword">Password</label>
+       <input id="loginPassword" name="password" type="password" placeholder="Enter your password" autocomplete="current-password" required />
+       <button type="submit" class="primary wide" id="loginBtn">Sign in securely</button>
+     </form>
+     <form id="recoveryForm" class="hide" autocomplete="off">
+       <label for="newPassword">Choose a new password</label>
+       <input id="newPassword" type="password" minlength="12" autocomplete="new-password" required placeholder="At least 12 characters" />
+       <button class="primary wide" type="submit">Update password</button>
+     </form>
+     <div class="authfoot"><button type="button" class="linkbtn" id="forgotBtn">Forgot password?</button><span>Invite-only access · No public sign-up</span></div>
+     <p id="loginError" role="alert" class="errorbox hide"></p>
+     <div class="authdisclaimer">Live WhatsApp sending, AI auto-replies and broadcasts are disabled in staging.</div>
+   </section>
+ </div>
+ <div id="appScreen" class="app expanded hide">
+   <aside class="rail" aria-label="Main navigation">
+     <div class="brandline"><div class="brandmark">F</div><div class="brandname">FSP CONNECT<small>FUTURE SECURE PROVIDERS</small></div></div>
+     <nav id="nav" class="navlist"></nav>
+     <div class="railbottom">
+       <div class="railstatus"><span class="statusdot"></span><span>Staging · Sending OFF</span></div>
+       <button type="button" class="navbtn" id="signOutNav"><span class="navicon">↪</span><span class="navlabel">Sign out</span></button>
+     </div>
+   </aside>
+   <div class="shell">
+     <header class="topbar">
+       <div class="product"><button class="menu-btn" id="menuBtn" aria-label="Toggle menu">☰</button><div><b>Future Secure Providers</b><small>WhatsApp AI Communication Platform</small></div></div>
+       <div class="topright"><span class="environment">STAGING</span><span class="statuspill">● Sending OFF</span><div id="avatar" class="avatar">FS</div><button class="btn" id="signOutTop">Logout</button></div>
+     </header>
+     <main class="page" id="mainContent" tabindex="-1" aria-live="polite"></main>
+   </div>
+ </div>
+ <div id="toast" class="toast hide" role="status" aria-live="polite"></div>
+ <script src="./app.js" defer></script>
+</body></html>
