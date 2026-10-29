@@ -15,13 +15,15 @@ const date=s=>s?new Date(s).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',day:
 const roleTag=r=>(r||'viewer').toUpperCase();
 const state={session:null,operator:null,page:'Overview',summary:null,convs:[],contacts:[],messages:[],chosen:null,details:null,operators:[],loading:false,offset:0};
 const sessionName='fsp-connect-21-staging-tab-session';
+let refreshPending=null;
+let sessionEpoch=0;
 const testReplyAttempted=new Set(); // one reply attempt per conversation per page session
 function notice(text,secure=false){return `<div class="notice ${secure?'secure':''}">${h(text)}</div>`}
 let toastTimer;
 function toast(msg){$('toast').textContent=msg;$('toast').classList.remove('hide');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.add('hide'),4000)}
 function showAuth(message=''){$('appScreen').classList.add('hide');$('loginScreen').classList.remove('hide');$('loginError').textContent=message;$('loginError').classList.toggle('hide',!message)}
 function showApp(){$('loginScreen').classList.add('hide');$('appScreen').classList.remove('hide');$('avatar').textContent=(state.operator?.name||'FSP').slice(0,2).toUpperCase()}
-function clearSession(){state.session=null;state.operator=null;state.summary=null;state.convs=[];state.contacts=[];state.chosen=null;state.messages=[];sessionStorage.removeItem(sessionName);localStorage.removeItem(sessionName)}
+function clearSession(){sessionEpoch++;state.session=null;state.operator=null;state.summary=null;state.convs=[];state.contacts=[];state.chosen=null;state.messages=[];try{sessionStorage.removeItem(sessionName)}catch{}try{localStorage.removeItem(sessionName)}catch{}}
 function saveSession(s){
  state.session=s;
  try{
