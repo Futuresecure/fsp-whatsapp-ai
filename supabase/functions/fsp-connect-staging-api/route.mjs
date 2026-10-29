@@ -14,7 +14,8 @@ export function resolveFspRoute(requestUrl) {
         !/^\/(?:api\/|healthz(?:\?|$))/.test(routed)) return null;
     let target;
     try { target = new URL(routed, ORIGIN); } catch { return null; }
-    if (target.origin !== ORIGIN) return null;
+    const rawPath = routed.split('?')[0];
+    if (target.origin !== ORIGIN || target.pathname !== rawPath) return null;
     return { path: target.pathname, url: target };
   }
   let pathname = incoming.pathname;
