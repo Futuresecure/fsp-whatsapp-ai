@@ -112,6 +112,7 @@ async function openConversation(id){state.chosen=id;renderConversationList();
  $('chatTitle').textContent='Loading conversation…';$('chatBody').innerHTML='<div class="loading">Loading messages…</div>';
  try{
   const [d,m]=await Promise.all([api('/api/conversations/'+id),api('/api/conversations/'+id+'/messages?limit=100')]);
+  if(state.chosen!==id || state.page!=='Inbox')return; // prevent racing views from changing another conversation
   state.details=d.data;state.messages=(m.data||[]).reverse();
   const who=d.data.contact?.display_name||d.data.contact?.profile_name||d.data.contact?.wa_id||id;
   $('chatTitle').textContent=who;
@@ -123,6 +124,28 @@ async function openConversation(id){state.chosen=id;renderConversationList();
    const small=document.createElement('div');small.className='msgmeta';small.textContent=msg.direction+' · '+msg.provider_status+' · '+date(msg.provider_timestamp||msg.created_at);
    el.append(b,small);box.appendChild(el)});
   box.scrollTop=box.scrollHeight;renderContext();renderReplyComposer();renderConversationList();
+  // Opening a conversation counts as reading it internally, but only after messages
+  // have loaded. The backend verifies the exact unread snapshot before clearing.
+  if(Number(d.data.unread_count)>0 && state.operator?.role!=='viewer'){
+    try{
+      const change=await api('/api/conversations/'+id+'/actions','POST',{
+        action:'auto_mark_read',
+        observed_last_message_at:d.data.last_message_at,
+        observed_unread_count:d.data.unread_count
+      });
+      if(state.chosen===id && state.page==='Inbox' && change.marked_read){
+        state.details.unread_count=0;
+        const item=state.convs.find(x=>x.id===id);
+        if(item)item.unread_count=0;
+        renderContext();
+        renderConversationList();
+      }
+      // Snapshot changed: leave unread intact, so newly arrived messages are not lost.
+    }catch(e){
+      if(state.chosen===id && state.page==='Inbox')
+        toast('Auto Mark as Read unavailable. Use Mark read if needed.');
+    }
+  }
  }catch(e){$('chatTitle').textContent='Unable to open conversation';$('chatBody').textContent=e.message;toast(e.message)}
 }
 /**
