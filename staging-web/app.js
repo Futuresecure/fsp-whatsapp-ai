@@ -149,8 +149,38 @@ function renderPlanned(name){const [title,desc]=planned[name]||['Module pending'
 }
 function renderSettings(){const op=state.operator||{};
  content(header('Settings','Workspace access and staging operational controls')+
- `<div class="twocol"><section class="card modulebox"><h2>Signed-in operator</h2><div class="inforow"><span>Name</span><b>${h(op.name)}</b></div><div class="inforow"><span>Role</span><b>${h(roleTag(op.role))}</b></div><div class="inforow"><span>Account</span><b>${h(op.id)}</b></div><button class="btn danger" type="button" id="settingsLogout">Sign out</button></section><section class="card modulebox"><h2>Staging safety</h2><div class="inforow"><span>Live WhatsApp sending</span><b class="pill amber">Disabled</b></div><div class="inforow"><span>Broadcast</span><b class="pill amber">Disabled</b></div><div class="inforow"><span>AI Auto Reply</span><b class="pill amber">Disabled</b></div><div class="inforow"><span>Automation</span><b class="pill amber">Disabled</b></div></section></div>`);
+ `<div class="twocol"><section class="card modulebox"><h2>Signed-in operator</h2><div class="inforow"><span>Name</span><b>${h(op.name)}</b></div><div class="inforow"><span>Role</span><b>${h(roleTag(op.role))}</b></div><div class="inforow"><span>Account</span><b>${h(op.id)}</b></div><button class="btn danger" type="button" id="settingsLogout">Sign out</button></section><section class="card modulebox"><h2>Staging safety</h2><div class="inforow"><span>Live WhatsApp sending</span><b class="pill amber">Disabled</b></div><div class="inforow"><span>Broadcast</span><b class="pill amber">Disabled</b></div><div class="inforow"><span>AI Auto Reply</span><b class="pill amber">Disabled</b></div><div class="inforow"><span>Automation</span><b class="pill amber">Disabled</b></div></section></div>`+
+ (op.role==='admin'? `<section class="card modulebox" style="margin-top:16px">
+    <h2>Meta WhatsApp connection</h2>
+    <p>Checks saved configuration and the linked WhatsApp sender using a read-only Meta request.
+       No WhatsApp message will be sent.</p>
+    <button type="button" class="btn" id="metaCheckBtn">Check Meta Connection</button>
+    <p id="metaCheckResult" role="status" aria-live="polite" style="white-space:pre-line;margin-top:12px"></p>
+  </section>` : '') );
  $('settingsLogout').onclick=signOut;
+ const checkButton=$('metaCheckBtn');
+ if(checkButton){
+   checkButton.onclick=async()=>{
+     checkButton.disabled=true;
+     const resultPanel=$('metaCheckResult');
+     resultPanel.textContent='Checking connection…';
+     try{
+       const r=await api('/api/meta/connection-check');
+       const stateName=(value)=>value?'Configured':'Missing or invalid';
+       const lines=[
+         'Access Token: '+stateName(r.accessTokenConfigured),
+         'Phone Number ID: '+stateName(r.phoneNumberIdConfigured),
+         'Test Recipient: '+stateName(r.testRecipientConfigured),
+         'Meta Graph API: '+String(r.graphAccess||'not_checked'),
+         'Sender number suffix: '+String(r.senderSuffix||'Unavailable'),
+         'Sending: '+(r.sendingEnabled?'ENABLED — review before testing':'OFF (safe)')
+       ];
+       resultPanel.textContent=lines.join('\\n');
+     }catch(e){resultPanel.textContent='Connection check could not finish: '+String(e.message||'Unknown error')}
+     finally{checkButton.disabled=false;}
+   };
+ }
+
 }
 $('loginForm').addEventListener('submit',async e=>{e.preventDefault();const btn=$('loginBtn');btn.disabled=true;btn.textContent='Authenticating…';$('loginError').classList.add('hide');try{await login($('loginEmail').value.trim(),$('loginPassword').value)}catch(err){showAuth(err.message)}finally{btn.disabled=false;btn.textContent='Sign in securely';$('loginPassword').value=''}});
 $('forgotBtn').onclick=async()=>{
