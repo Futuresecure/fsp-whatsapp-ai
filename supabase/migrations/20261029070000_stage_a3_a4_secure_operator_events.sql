@@ -57,7 +57,7 @@ do $$ declare t text; begin
     execute format('grant select,insert,update,delete on table public.%I to service_role',t);
     execute format('create policy deny_client_access on public.%I for all to anon,authenticated using (false) with check(false)',t);
   end loop;
-end $$;
+end; $$;
 
 -- NOTE: only service_role may execute these transaction-safe routines; all use SECURITY INVOKER.
 create function public.fsp_enqueue_events(p_events jsonb)
@@ -81,7 +81,7 @@ begin
     inserted := inserted + affected;
   end loop;
   return inserted;
-end $$;
+end; $$;
 
 create function public.fsp_claim_events(p_limit integer default 10, p_lease_seconds integer default 60)
 returns setof public.fsp_webhook_events language plpgsql security invoker set search_path = '' as $$
@@ -99,7 +99,7 @@ begin
   update public.fsp_webhook_events e set state='processing', lease_token=gen_random_uuid(),
     lease_until=now()+make_interval(secs=>p_lease_seconds), attempts=e.attempts+1
   from claimed where e.id=claimed.id returning e.*;
-end $$;
+end; $$;
 
 -- Preserve highest provider-observed delivery state, even when events arrive out of order.
 create function public.fsp_reconcile_message_status(p_message_id text)
@@ -121,7 +121,7 @@ begin
     read_at=case when s.provider_status='read' then coalesce(read_at,s.provider_timestamp,now()) else read_at end,
     error_code=case when s.provider_status='failed' then s.error_code else error_code end
   where provider_message_id=p_message_id and direction='outbound';
-end $$;
+end; $$;
 
 -- For outbound messages persisted at a later stage, previously received status events can be reconciled.
 create function public.fsp_reconcile_outbound_insert()
@@ -131,7 +131,7 @@ begin
    perform public.fsp_reconcile_message_status(new.provider_message_id);
  end if;
  return new;
-end $$;
+end; $$;
 create trigger fsp_status_after_outbound_insert after insert on public.whatsapp_messages
 for each row execute function public.fsp_reconcile_outbound_insert();
 
@@ -203,9 +203,9 @@ begin
       next_attempt_at=now()+make_interval(secs=>least(3600,(2 ^ least(attempts,10))::integer)),
       last_error=left(v_err,500),lease_token=null,lease_until=null
     where id=p_id;
-    return case when ev.attempts >= p_max_attempts then 'dead' else 'retry'; end;
+    return case when ev.attempts >= p_max_attempts then 'dead' else 'retry' end;
   end;
-end $$;
+end; $$;
 
 -- Direct client API access to functions is denied. Service_role can invoke, no SECURITY DEFINER used.
 do $$ declare f text; begin
@@ -214,4 +214,4 @@ do $$ declare f text; begin
    execute format('revoke all on function public.%s from public,anon,authenticated',f);
    execute format('grant execute on function public.%s to service_role',f);
  end loop;
-end $$;
+end; $$;
