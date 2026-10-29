@@ -1,0 +1,37 @@
+name: FSP Connect Stage B2 Manual Reply Safety QA
+on:
+  push:
+    branches: [dev]
+    paths:
+      - 'supabase/functions/fsp-connect-staging-api/**'
+      - 'tests/stage-b2-reply.test.mjs'
+      - '.github/workflows/stage-b2-check.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test restricted replies without Meta credentials
+        run: node --test tests/stage-b2-reply.test.mjs
+      - name: Staging API health remains inbound only
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://vzcpzhobtfwhurcsppdl.supabase.co/functions/v1/fsp-connect-staging-api"
+          CODE=$(curl -fsS --max-time 20 -o /tmp/b2-health.json -w '%{http_code}' "$URL?route=%2Fhealthz")
+          test "$CODE" = "200"
+          grep -q '"messaging":"disabled"' /tmp/b2-health.json
+      - name: Unauthenticated reply endpoint rejected
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://vzcpzhobtfwhurcsppdl.supabase.co/functions/v1/fsp-connect-staging-api"
+          CODE=$(curl -sS --max-time 20 -o /tmp/b2-noauth.json -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{"text":"test","request_id":"aabbccdd-1234-4234-8234-123456789abc"}' "$URL?route=%2Fapi%2Fconversations%2Faabbccdd-1234-4234-8234-123456789abc%2Freply")
+          test "$CODE" = "401"

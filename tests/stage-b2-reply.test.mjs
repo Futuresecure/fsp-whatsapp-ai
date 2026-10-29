@@ -1,0 +1,23 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { assessReply,sendGraphText,executeRestrictedReply } from '../supabase/functions/fsp-connect-staging-api/reply-core.mjs';
+const ID='aabbccdd-1234-4234-8234-123456789abc';
+const op={active:true,role:'admin',user_id:ID};
+const conv={assigned_to:null};
+const cfg={enabled:true,phoneNumberId:'1248446071686225',token:'x'.repeat(42),allowRecipient:'919999111222'};
+const data={operator:op,conversation:conv,recipient:cfg.allowRecipient,lastInboundAt:new Date(Date.now()-10000).toISOString(),text:'Hello',requestId:ID,config:cfg};
+test('valid staged customer response passes',()=>assert.equal(assessReply(data).ok,true));
+test('sending requires explicit flag',()=>assert.equal(assessReply({...data,config:{...cfg,enabled:false}}).status,503));
+test('sending requires provider token',()=>assert.equal(assessReply({...data,config:{...cfg,token:''}}).status,503));
+test('recipient allowlist fail closed',()=>assert.equal(assessReply({...data,recipient:'919777555666'}).status,403));
+test('staging allowlist cannot be blank',()=>assert.equal(assessReply({...data,config:{...cfg,allowRecipient:''}}).status,403));
+test('viewer and unassigned agent blocked',()=>{assert.equal(assessReply({...data,operator:{...op,role:'viewer'}}).status,403);assert.equal(assessReply({...data,operator:{...op,role:'agent'}}).status,404)});
+test('customer 24h window enforced',()=>assert.equal(assessReply({...data,lastInboundAt:new Date(Date.now()-25*3600000).toISOString()}).status,403));
+test('invalid body and id blocked',()=>{assert.equal(assessReply({...data,text:''}).status,400);assert.equal(assessReply({...data,requestId:'not-a-uuid'}).status,400)});
+test('Graph API call has correct payload, bearer token and version',async()=>{
+ let sent;const out=await sendGraphText({phoneNumberId:cfg.phoneNumberId,recipient:cfg.allowRecipient,text:'Hi',token:cfg.token,fetchImpl:async(url,options)=>{sent={url,options};return {ok:true,json:async()=>({messages:[{id:'wamid.TEST_META_MESSAGE_00001'}]})}}});
+ assert.equal(out.accepted,true);assert.equal(sent.url,`https://graph.facebook.com/v26.0/${cfg.phoneNumberId}/messages`);assert.equal(sent.options.headers.authorization,'Bearer '+cfg.token);const body=JSON.parse(sent.options.body);assert.equal(body.to,cfg.allowRecipient);assert.equal(body.text.body,'Hi');
+});
+test('no outbound call on duplicate idempotency key',async()=>{let n=0;const a=await executeRestrictedReply({input:{...data,ok:true},claim:async()=>false,send:async()=>{n++},record:async()=>{},markFailure:async()=>{}});assert.equal(a.status,409);assert.equal(n,0)});
+test('ambiguous provider response is not retried',async()=>{let n=0;const a=await executeRestrictedReply({input:{...data,ok:true},claim:async()=>true,send:async()=>{n++;throw Error('timeout')},record:async()=>{},markFailure:async()=>{}});assert.equal(a.status,502);assert.equal(n,1)});
+test('provider accepted but persistence fails returns warning',async()=>{const a=await executeRestrictedReply({input:{...data,ok:true},claim:async()=>true,send:async()=>({accepted:true,messageId:'wamid.TEST_12345'}),record:async()=>{throw Error('database')},markFailure:async()=>{}});assert.equal(a.status,202)});
