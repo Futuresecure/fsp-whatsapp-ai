@@ -175,7 +175,7 @@ function renderSettings(){const op=state.operator||{};
          'Sender number suffix: '+String(r.senderSuffix||'Unavailable'),
          'Sending: '+(r.sendingEnabled?'ENABLED — review before testing':'OFF (safe)')
        ];
-       resultPanel.textContent=lines.join('\\n');
+       resultPanel.textContent=lines.join('\n');
      }catch(e){resultPanel.textContent='Connection check could not finish: '+String(e.message||'Unknown error')}
      finally{checkButton.disabled=false;}
    };
