@@ -5,6 +5,7 @@ on:
     branches: [dev]
     paths:
       - 'tests/staging-routes.test.mjs'
+      - 'tests/stage-b-persistent-login.test.mjs'
       - 'tests/stage-b-auto-read.test.mjs'
       - 'tests/stage-b-auto-read-ui.test.mjs'
       - 'tests/stage-b3-meta-connection.test.mjs'
@@ -35,6 +36,8 @@ jobs:
         run: node --test tests/stage-b-auto-read.test.mjs
       - name: Test Inbox opening in browser-like simulation
         run: node --test tests/stage-b-auto-read-ui.test.mjs
+      - name: Test remembered login and logout across browser restarts
+        run: node --test tests/stage-b-persistent-login.test.mjs
       - name: Check browser JavaScript syntax
         run: node --check staging-web/app.js
       - name: Verify staging API liveness (no credentials)
