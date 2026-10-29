@@ -22,7 +22,18 @@ function toast(msg){$('toast').textContent=msg;$('toast').classList.remove('hide
 function showAuth(message=''){$('appScreen').classList.add('hide');$('loginScreen').classList.remove('hide');$('loginError').textContent=message;$('loginError').classList.toggle('hide',!message)}
 function showApp(){$('loginScreen').classList.add('hide');$('appScreen').classList.remove('hide');$('avatar').textContent=(state.operator?.name||'FSP').slice(0,2).toUpperCase()}
 function clearSession(){state.session=null;state.operator=null;state.summary=null;state.convs=[];state.contacts=[];state.chosen=null;state.messages=[];sessionStorage.removeItem(sessionName);localStorage.removeItem(sessionName)}
-function saveSession(s){state.session=s;localStorage.setItem(sessionName,JSON.stringify(s));sessionStorage.removeItem(sessionName)}
+function saveSession(s){
+ state.session=s;
+ try{
+  localStorage.setItem(sessionName,JSON.stringify(s));
+  try{sessionStorage.removeItem(sessionName)}catch{}
+  return true;
+ }catch{
+  // Browser storage may be disabled; fall back to the current tab.
+  try{sessionStorage.setItem(sessionName,JSON.stringify(s))}catch{}
+  return false;
+ }
+}
 async function authCall(path,method,body,bearer){
  const headers={'apikey':CONFIG.publishableKey,'content-type':'application/json'};
  if(bearer)headers.authorization='Bearer '+bearer;
@@ -270,14 +281,17 @@ window.addEventListener('unhandledrejection',()=>toast('Request failed. Please r
  // Password-recovery tokens must never remain in address bar/history.
  if(location.hash){const kv=new URLSearchParams(location.hash.slice(1));
   if(kv.get('type')==='recovery'&&kv.get('access_token')){
-   saveSession({access_token:kv.get('access_token'),refresh_token:kv.get('refresh_token'),expires_at:Math.floor(Date.now()/1000)+Number(kv.get('expires_in')||3600)});
+   clearSession();state.session={access_token:kv.get('access_token'),refresh_token:kv.get('refresh_token'),expires_at:Math.floor(Date.now()/1000)+Number(kv.get('expires_in')||3600)}; // Recovery sessions are not persisted.
    $('loginForm').classList.add('hide');$('recoveryForm').classList.remove('hide');$('loginTitle').textContent='Reset your password';
   }
   history.replaceState(null,'',location.pathname+location.search);
  }
  if(!$('recoveryForm').classList.contains('hide'))return;
  try{
-  const stored=localStorage.getItem(sessionName)||sessionStorage.getItem(sessionName);if(stored){state.session=JSON.parse(stored);if(!localStorage.getItem(sessionName))saveSession(state.session)}
+  let stored=null;
+  try{stored=localStorage.getItem(sessionName)}catch{}
+  if(!stored){try{stored=sessionStorage.getItem(sessionName)}catch{}}
+  if(stored){state.session=JSON.parse(stored);saveSession(state.session)}
   if(state.session){const me=await api('/api/me');state.operator=me;showApp();await navigate('Overview')}
   else showAuth();
  }catch{clearSession();showAuth()}
