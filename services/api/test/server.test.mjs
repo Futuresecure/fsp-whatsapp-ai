@@ -117,7 +117,7 @@ test('agent denied assign, admin allows note but no outgoing message',async()=>{
 test('gateway verification uses auth user endpoint and does not trust raw JWT claims',async()=>{
  const calls=[];
  const g=createSupabaseGateway({url:'https://example.supabase.co',secretKey:'not-real-secret',publishableKey:'not-real-key',fetchImpl:async(url,opts)=>{
-  calls.push({url,opts});return {ok:true,status:200,json:async()=>({id:user,is_anonymous:false})};
+  calls.push({url,opts});return {ok:true,status:200,text:async()=>JSON.stringify({id:user,is_anonymous:false})};
  }});
  assert.equal((await g.verifyUser('not-real-token')).id,user);
  assert.ok(calls[0].url.endsWith('/auth/v1/user'));
@@ -157,4 +157,10 @@ test('new operator sees only assigned conversations',async()=>{
   assert.equal(res.status,200);
   assert.ok(g.calls.some(c=>c.name==='whatsapp_conversations'&&c.query.includes('assigned_to=eq.'+user)));
  });
+});
+
+
+test('Supabase REST writes with empty 201 body do not cause false failure',async()=>{
+ const g=createSupabaseGateway({url:'https://example.supabase.co',secretKey:'server-secret',publishableKey:'browser-publishable',fetchImpl:async()=>({ok:true,status:201,text:async()=>''})});
+ assert.equal(await g.table('fsp_operator_audit','',{method:'POST',body:{action:'note'}}),null);
 });

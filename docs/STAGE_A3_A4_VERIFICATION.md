@@ -13,13 +13,13 @@ Target GitHub: `Futuresecure/fsp-whatsapp-ai`, `dev` only. Supabase project `vzc
 
 ## Verification performed
 
-- Local Node.js 22 automated tests: **15 PASS / 0 FAIL** (`npm test`). `npm run check` executed for earlier 11-test build; rerun on current source is recommended in CI.
+- Local Node.js 22 automated tests: **16 PASS / 0 FAIL** (`npm test`). `npm run check` also PASS for the current source.
 - Database migration `stage_a3_a4_secure_operator_events` applied successfully (version `20261029063307`).
 - Database integration within explicit `BEGIN` ... `ROLLBACK`: inbound event enqueue, leased processing, message persistence, unread count 1, opt-in false, duplicate enqueue returns zero, provider read-before-sent reconciliation results `read`: **PASS**.
 - Database transaction test within explicit `BEGIN` ... `ROLLBACK`: invalid event retries then dead-letters at second attempt: **PASS**.
 - All four new public tables have RLS enabled. Five worker SQL functions deny `anon` and `authenticated` execute grants; `service_role` grant confirmed.
 - Supabase Security Advisor returned **0 findings** after migration.
-- No production customer messages sent, no operator accounts created, and no Meta phone changes made.
+- Supabase REST empty 201 responses are handled without false action failures. No production customer messages sent, no operator accounts created, and no Meta phone changes made.
 
 ## Not yet tested / launch blockers
 

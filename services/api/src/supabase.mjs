@@ -7,7 +7,8 @@ export function createSupabaseGateway({url,secretKey,publishableKey,fetchImpl=fe
     const response=await fetchImpl(root+path,{method,headers:{...(userToken?{'apikey':publishableKey,'authorization':'Bearer '+userToken}:privilegedHeaders),...headers},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(10000)});
     if (!response.ok) throw new UpstreamError(response.status,'Upstream request failed');
     if (response.status===204) return null;
-    return response.json();
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
   }
   return {
     request,
