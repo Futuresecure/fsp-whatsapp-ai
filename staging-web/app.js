@@ -87,9 +87,9 @@ function stat(label,value,sub){return `<div class="card stat"><div class="eyebro
 function renderOverview(name){const s=state.summary||{};
  const scope=s.scope==='assigned'?'Only conversations assigned to you':'Workspace-wide activity';
  content(header(name,name==='Analytics'?'Verified database counts, not campaign-delivery estimates':'Your FSP Connect staging workspace')+
- notice('STAGING MODE — This is connected to the FSP Connect database. Inbound Meta webhook receiver is deployed; test-app verification and subscription are still pending. Sending stays disabled.')+
+ notice('STAGING MODE — This is connected to the FSP Connect database. Inbound webhook receiver is deployed; Meta callback cutover is pending. Restricted test replies need an incoming test conversation and a valid service window.')+
  `<div class="statgrid">${stat('Conversations',s.conversations,scope)}${stat('Unread conversations',s.unread_conversations,'From Inbox database')}${stat('Contacts',s.contacts,s.contacts===null?'Available to Admin / Manager':'Stored customer contacts')}${stat('Message records',s.messages,s.messages===null?'Available to Admin / Manager':'Provider-backed records')}</div>`+
- `<div class="twocol"><section class="card modulebox"><h2>Communication workspace</h2><p>Read authorised conversations, inspect message history and manage internal operator actions. Staging does not send messages.</p><button id="openInbox" class="primary">Open Inbox</button></section><section class="card modulebox"><h2>Safety controls</h2><div class="inforow"><span>WhatsApp outgoing</span><b class="pill amber">OFF</b></div><div class="inforow"><span>AI Auto Reply</span><b class="pill amber">OFF</b></div><div class="inforow"><span>Broadcast / Automation</span><b class="pill amber">OFF</b></div></section></div>`);
+ `<div class="twocol"><section class="card modulebox"><h2>Communication workspace</h2><p>Read authorised conversations, inspect message history and manage internal operator actions. Staging does not send messages.</p><button id="openInbox" class="primary">Open Inbox</button></section><section class="card modulebox"><h2>Safety controls</h2><div class="inforow"><span>WhatsApp outgoing</span><b class="pill amber">Test allowlist only</b></div><div class="inforow"><span>AI Auto Reply</span><b class="pill amber">OFF</b></div><div class="inforow"><span>Broadcast / Automation</span><b class="pill amber">OFF</b></div></section></div>`);
  $('openInbox').onclick=()=>navigate('Inbox');
 }
 function titleFor(c){const d=state.details?.id===c.id?state.details.contact:null;return d?.display_name||d?.profile_name||'Conversation '+c.id.slice(0,8)}
@@ -102,8 +102,8 @@ function renderConversationList(){const node=$('conversationList');if(!node)retu
  const bot=document.createElement('div');bot.className='btnrow';const pill=document.createElement('span');pill.className='pill '+(c.unread_count?'blue':'');pill.textContent=c.unread_count?c.unread_count+' unread':'No unread';bot.appendChild(pill);
  b.append(top,status,bot);b.onclick=()=>openConversation(c.id);node.appendChild(b)});
 }
-async function renderInbox(){content(header('Inbox','Incoming and outgoing message history · no sending')+
- '<div class="inbox"><section class="convcol"><div class="colhead"><h2>Conversations</h2><input class="input" id="convSearch" aria-label="Search conversations" placeholder="Search conversation…" style="margin-top:12px" /></div><div id="conversationList" class="convlist"></div></section><section class="chatcol"><div class="chathead"><div><b id="chatTitle">Select a conversation</b><div class="muted tiny" id="chatDesc">Private message history</div></div><div class="btnrow"><span class="pill amber">Send OFF</span><button type="button" class="btn" id="detailsBtn">Details</button></div></div><div class="chatbody" id="chatBody"><div class="empty">Select a conversation to view real messages.</div></div><div class="composer"><div class="disabledsend">🔒 Outgoing WhatsApp is disabled. Internal notes can be saved by authorised operators.</div></div></section><section class="contextcol"><div class="colhead"><h2>Conversation details</h2></div><div class="contextbody" id="contextBody"><p class="muted tiny">Select a conversation.</p></div></section></div>');
+async function renderInbox(){content(header('Inbox','Inbound messages and restricted manual test replies')+
+ '<div class="inbox"><section class="convcol"><div class="colhead"><h2>Conversations</h2><input class="input" id="convSearch" aria-label="Search conversations" placeholder="Search conversation…" style="margin-top:12px" /></div><div id="conversationList" class="convlist"></div></section><section class="chatcol"><div class="chathead"><div><b id="chatTitle">Select a conversation</b><div class="muted tiny" id="chatDesc">Private message history</div></div><div class="btnrow"><span class="pill amber">Test replies only</span><button type="button" class="btn" id="detailsBtn">Details</button></div></div><div class="chatbody" id="chatBody"><div class="empty">Select a conversation to view real messages.</div></div><div class="composer" id="replyComposer"><div class="disabledsend">Select an authorized test conversation to reply. Test-recipient allowlist and 24-hour reply window are enforced.</div></div></section><section class="contextcol"><div class="colhead"><h2>Conversation details</h2></div><div class="contextbody" id="contextBody"><p class="muted tiny">Select a conversation.</p></div></section></div>');
  $('convSearch').oninput=renderConversationList;
  $('detailsBtn').onclick=()=>document.querySelector('.contextcol')?.classList.toggle('open');
  renderConversationList();if(state.chosen&&state.convs.some(c=>c.id===state.chosen))await openConversation(state.chosen);}
@@ -121,9 +121,54 @@ async function openConversation(id){state.chosen=id;renderConversationList();
    const b=document.createElement('div');b.className='bubble';b.textContent=msg.body??('['+msg.message_type+' message]');
    const small=document.createElement('div');small.className='msgmeta';small.textContent=msg.direction+' · '+msg.provider_status+' · '+date(msg.provider_timestamp||msg.created_at);
    el.append(b,small);box.appendChild(el)});
-  box.scrollTop=box.scrollHeight;renderContext();renderConversationList();
+  box.scrollTop=box.scrollHeight;renderContext();renderReplyComposer();renderConversationList();
  }catch(e){$('chatTitle').textContent='Unable to open conversation';$('chatBody').textContent=e.message;toast(e.message)}
 }
+/**
+ * Manual Stage B2 test reply.
+ * The server independently checks operator, allowlisted number, 24h inbound window,
+ * valid text and idempotency. The browser never receives the provider token.
+ */
+function renderReplyComposer(){
+ const node=$('replyComposer');if(!node)return;
+ const canWrite=state.operator?.role!=='viewer';
+ if(!state.chosen||!state.details||!canWrite){
+   node.replaceChildren();
+   const note=document.createElement('div');note.className='disabledsend';
+   note.textContent=canWrite?'Select a conversation to send a controlled test reply.':'Read-only access: replies are not permitted.';
+   node.appendChild(note);
+   return;
+ }
+ node.innerHTML=`<label for="testReplyText" class="tiny"><b>Manual test reply</b> — allowed test recipient only, within 24 hours of their inbound message</label>
+   <div class="btnrow" style="align-items:stretch;gap:8px;margin-top:8px">
+     <textarea id="testReplyText" class="input" maxlength="4096" rows="2" style="flex:1;min-width:170px" placeholder="Write a test reply…"></textarea>
+     <button id="testReplySend" class="primary" type="button">Send test reply</button>
+   </div><p id="testReplyResult" class="muted tiny" role="status" aria-live="polite">No AI, templates or broadcasts. Do not send real customer messages.</p>`;
+ const button=$('testReplySend');const input=$('testReplyText');const status=$('testReplyResult');
+ button.onclick=async()=>{
+   const text=input.value.trim();if(!text){status.textContent='Enter a test reply first.';return}
+   if(text.length>4096){status.textContent='Message too long.';return}
+   if(!window.confirm('Send ONE WhatsApp test reply to the allowlisted number? Only send if this is your test conversation.'))return;
+   button.disabled=true;input.disabled=true;
+   status.textContent='Submitting one test reply…';
+   // Retry is intentionally disabled after an uncertain response to prevent duplicate messages.
+   const requestId=crypto.randomUUID();
+   try {
+     const reply=await api('/api/conversations/'+state.chosen+'/reply','POST',{text,request_id:requestId});
+     if(reply.ok){
+       status.textContent='Meta accepted this test reply. Checking message history…';
+       await openConversation(state.chosen);
+       toast('Test reply accepted by Meta');
+     } else {
+       status.textContent=reply.warning||'Provider result uncertain. Do not resend; check message history.';
+     }
+   }catch(e){
+     status.textContent=(e.message||'Could not verify delivery')+' — Do not retry until delivery is checked.';
+   }
+   // The composer is deliberately not reenabled for this conversation until refreshed.
+ };
+}
+
 function renderContext(){const panel=$('contextBody');if(!panel||!state.details)return;
  const c=state.details,who=c.contact||{},canWrite=state.operator.role!=='viewer';
  panel.innerHTML=`<div class="inforow"><span>Contact</span><b>${h(who.display_name||who.profile_name||'—')}</b></div><div class="inforow"><span>WhatsApp ID</span><b>${h(who.wa_id||'—')}</b></div><div class="inforow"><span>Status</span><b>${h(c.status)}</b></div><div class="inforow"><span>Unread</span><b>${Number(c.unread_count||0)}</b></div>${canWrite?`<h3>Internal actions</h3><div class="btnrow"><button class="btn" id="markRead">Mark read</button><button class="btn" id="resolveBtn">${c.status==='resolved'?'Reopen':'Resolve'}</button><button class="btn" id="takeoverBtn">Human takeover</button></div><label for="noteText">Internal note (not sent to WhatsApp)</label><textarea id="noteText" class="input" maxlength="4000" placeholder="Enter internal notes…"></textarea><button id="saveNote" class="primary">Save internal note</button>`:'<div class="notice secure">Viewer role — read-only.</div>'}`;
