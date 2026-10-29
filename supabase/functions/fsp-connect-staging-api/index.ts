@@ -1,3 +1,4 @@
+import {buildAutoReadFilter} from './auto-read.mjs';
 import {checkMetaConnection} from './meta-connection.mjs';
 import {assessReply,sendGraphText,executeRestrictedReply} from './reply-core.mjs';
 import {resolveFspRoute} from './route.mjs';
@@ -218,7 +219,33 @@ async function postApi(req:Request,path:string,op:any):Promise<Response>{
   let body:any; try{body=JSON.parse(bodyText)}catch{return fail(400,'Invalid request JSON')}
   if(!body||typeof body!=='object'||Array.isArray(body))return fail(400,'Invalid request');
   const action=body.action;
-  if(!['mark_read','resolve','reopen','takeover','pause_ai','assign','note'].includes(action))return fail(400,'Action not available in staging');
+  if(!['mark_read','auto_mark_read','resolve','reopen','takeover','pause_ai','assign','note'].includes(action))return fail(400,'Action not available in staging');
+  if(action==='auto_mark_read'){
+    // Never clear new inbound messages that arrived while the conversation was opening.
+    // Only the specific unread count and last-message snapshot observed by the operator
+    // may transition to zero. No Meta read receipt is sent by this internal action.
+    const filter=buildAutoReadFilter({
+      conversationId:id,
+      observedLastMessageAt:body.observed_last_message_at,
+      observedUnreadCount:body.observed_unread_count,
+      assignedTo:allowAll(op)?null:op.user_id
+    });
+    if(!filter)return fail(400,'Invalid read snapshot');
+    const changed=await callSupabase<any[]>('/rest/v1/whatsapp_conversations'+filter,{
+      method:'PATCH',
+      body:{unread_count:0,updated_at:new Date().toISOString()},
+      prefer:'return=representation'
+    });
+    if(!Array.isArray(changed.data)||changed.data.length>1)return fail(503,'Unable to confirm unread update');
+    if(changed.data.length===0)return respond(200,{ok:true,action,marked_read:false,reason:'snapshot_changed'});
+    await callSupabase('/rest/v1/fsp_operator_audit',{
+      method:'POST',
+      body:{operator_id:op.user_id,conversation_id:id,action:'auto_mark_read',
+        details:{previous_unread_count:body.observed_unread_count}},
+      prefer:'return=minimal'
+    });
+    return respond(200,{ok:true,action,marked_read:true,unread_count:0});
+  }
   const patch:Record<string,unknown>={updated_at:new Date().toISOString()};
   if(action==='mark_read')patch.unread_count=0;
   if(action==='resolve'){patch.status='resolved';patch.closed_at=new Date().toISOString()}
