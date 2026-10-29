@@ -1,3 +1,4 @@
+import {resolveFspRoute} from './route.mjs';
 /**
  * FSP Connect 2.1 — staging-only operator API.
  * No Meta API calls, customer imports, templates, broadcasts, or automated sends.
@@ -23,7 +24,6 @@ const escapeQuery = (v:string) => encodeURIComponent(v);
 const n = (v:string|null,max=100) => Math.min(max,Math.max(1,Number(v)||25));
 function respond(status:number, object:unknown): Response {return new Response(JSON.stringify(object),{status,headers:{...CORS,'content-type':'application/json; charset=utf-8'}})}
 function fail(status:number,message:string){return respond(status,{error:message})}
-function pathOf(req:Request){const p=new URL(req.url).pathname; const prefix='/functions/v1/fsp-connect-staging-api';return p.startsWith(prefix)?(p.slice(prefix.length)||'/'):p;}
 function configured(){return Boolean(PROJECT_URL && ADMIN_KEY && (PUBLISHABLE||ADMIN_KEY));}
 async function callSupabase<T=unknown>(route:string, opts:{method?:string, body?:unknown, prefer?:string, jwt?:string}={}) :Promise<{data:T, count:number|null}> {
   const headers:Record<string,string>={'apikey':ADMIN_KEY,'accept':'application/json'};
@@ -160,14 +160,16 @@ async function postApi(req:Request,path:string,op:any):Promise<Response>{
 }
 Deno.serve(async(req:Request)=>{
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:CORS});
-  const path=pathOf(req);
+  const route=resolveFspRoute(req.url);
+  if(!route)return fail(400,'Invalid route');
+  const {path}=route;
   if(path==='/healthz'&&req.method==='GET')return respond(200,{ok:true,environment:'staging',messaging:'disabled',auth_required:true});
   if(!path.startsWith('/api/'))return fail(404,'Not found');
   if(!configured())return fail(503,'Staging backend is not configured');
   try {
     const identity=await getAuthOperator(req);
     if('status'in identity)return fail(identity.status as number,identity.error as string);
-    if(req.method==='GET')return await getApi(req,path,identity.op,new URL(req.url));
+    if(req.method==='GET')return await getApi(req,path,identity.op,route.url);
     if(req.method==='POST')return await postApi(req,path,identity.op);
     return fail(405,'Method not allowed');
   }catch(e){
