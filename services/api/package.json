@@ -1,0 +1,13 @@
+{
+  "name": "fsp-connect-21-foundation-api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {"node": ">=22"},
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check src/server.mjs && node --check test/server.test.mjs"
+  },
+  "description": "Stage A foundation. No live send, no database writes."
+}
