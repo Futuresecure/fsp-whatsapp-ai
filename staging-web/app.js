@@ -15,6 +15,7 @@ const date=s=>s?new Date(s).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',day:
 const roleTag=r=>(r||'viewer').toUpperCase();
 const state={session:null,operator:null,page:'Overview',summary:null,convs:[],contacts:[],messages:[],chosen:null,details:null,operators:[],loading:false,offset:0};
 const sessionName='fsp-connect-21-staging-tab-session';
+const testReplyAttempted=new Set(); // one reply attempt per conversation per page session
 function notice(text,secure=false){return `<div class="notice ${secure?'secure':''}">${h(text)}</div>`}
 let toastTimer;
 function toast(msg){$('toast').textContent=msg;$('toast').classList.remove('hide');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.add('hide'),4000)}
@@ -74,7 +75,7 @@ async function navigate(name,force=false){
   content(header(name,'Actual FSP Connect database activity · no fictional data')+'<div class="loading">Loading real data…</div>');
   try{state.summary=await api('/api/dashboard');renderOverview(name)}catch(e){renderError(e)}
  }else if(name==='Inbox'){
-  content(header(name,'Live database conversations · messaging disabled')+'<div class="loading">Loading authorized conversations…</div>');
+  content(header(name,'Live database conversations · manual test replies restricted')+'<div class="loading">Loading authorized conversations…</div>');
   try{state.convs=(await api('/api/conversations?limit=50')).data||[];await renderInbox()}catch(e){renderError(e)}
  }else if(name==='Contacts'){
   content(header(name,'Contacts visible to your operator role')+'<div class="loading">Loading contacts…</div>');
@@ -132,10 +133,10 @@ async function openConversation(id){state.chosen=id;renderConversationList();
 function renderReplyComposer(){
  const node=$('replyComposer');if(!node)return;
  const canWrite=state.operator?.role!=='viewer';
- if(!state.chosen||!state.details||!canWrite){
+ if(!state.chosen||!state.details||!canWrite||testReplyAttempted.has(state.chosen)){ 
    node.replaceChildren();
    const note=document.createElement('div');note.className='disabledsend';
-   note.textContent=canWrite?'Select a conversation to send a controlled test reply.':'Read-only access: replies are not permitted.';
+   note.textContent=!canWrite?'Read-only access: replies are not permitted.':testReplyAttempted.has(state.chosen)?'A test reply was already attempted for this conversation. Refresh the page and verify delivery before any further test.':'Select a conversation to send a controlled test reply.';
    node.appendChild(note);
    return;
  }
@@ -149,15 +150,17 @@ function renderReplyComposer(){
    const text=input.value.trim();if(!text){status.textContent='Enter a test reply first.';return}
    if(text.length>4096){status.textContent='Message too long.';return}
    if(!window.confirm('Send ONE WhatsApp test reply to the allowlisted number? Only send if this is your test conversation.'))return;
+   const conversationId=state.chosen;
+   testReplyAttempted.add(conversationId);
    button.disabled=true;input.disabled=true;
    status.textContent='Submitting one test reply…';
    // Retry is intentionally disabled after an uncertain response to prevent duplicate messages.
    const requestId=crypto.randomUUID();
    try {
-     const reply=await api('/api/conversations/'+state.chosen+'/reply','POST',{text,request_id:requestId});
+     const reply=await api('/api/conversations/'+conversationId+'/reply','POST',{text,request_id:requestId});
      if(reply.ok){
        status.textContent='Meta accepted this test reply. Checking message history…';
-       await openConversation(state.chosen);
+       if(state.chosen===conversationId)await openConversation(conversationId);
        toast('Test reply accepted by Meta');
      } else {
        status.textContent=reply.warning||'Provider result uncertain. Do not resend; check message history.';
