@@ -1,3 +1,4 @@
+import {checkMetaConnection} from './meta-connection.mjs';
 import {assessReply,sendGraphText,executeRestrictedReply} from './reply-core.mjs';
 import {resolveFspRoute} from './route.mjs';
 /**
@@ -73,6 +74,17 @@ async function getApi(req:Request,path:string,op:any,url:URL):Promise<Response>{
   const scope=allowAll(op)?'':'&assigned_to=eq.'+escapeQuery(op.user_id);
   const pagination='&limit='+limit+'&offset='+offset;
   if(path==='/api/me')return respond(200,{id:op.user_id,role:op.role,name:op.display_name||'Operator'});
+  if(path==='/api/meta/connection-check'){
+    if(op.role!=='admin')return fail(403,'Administrator access required');
+    const config={
+      phoneNumberId:Deno.env.get('FSP_META_PHONE_NUMBER_ID')??'',
+      accessToken:Deno.env.get('FSP_META_ACCESS_TOKEN')??'',
+      testRecipient:Deno.env.get('FSP_META_TEST_RECIPIENT')??'',
+      sendingEnabled:Deno.env.get('FSP_META_SENDING_ENABLED')==='true'
+    };
+    const result=await checkMetaConnection({config});
+    return respond(200,result);
+  }
   if(path==='/api/health')return respond(200,{authenticated:true,connected:true,sending:false,aiAutoReply:false,broadcast:false});
   if(path==='/api/dashboard'){
     const [conversations,unread,contacts,messages]=await Promise.all([
