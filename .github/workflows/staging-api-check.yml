@@ -5,6 +5,7 @@ on:
     branches: [dev]
     paths:
       - 'tests/staging-routes.test.mjs'
+      - 'tests/stage-b-auto-read.test.mjs'
       - 'tests/stage-b3-meta-connection.test.mjs'
       - 'staging-web/app.js'
       - 'supabase/functions/fsp-connect-staging-api/**'
@@ -29,6 +30,8 @@ jobs:
         run: node --test tests/staging-routes.test.mjs
       - name: Test Meta connection diagnostics without credentials
         run: node --test tests/stage-b3-meta-connection.test.mjs
+      - name: Test guarded Inbox automatic mark-as-read
+        run: node --test tests/stage-b-auto-read.test.mjs
       - name: Check browser JavaScript syntax
         run: node --check staging-web/app.js
       - name: Verify staging API liveness (no credentials)
@@ -55,3 +58,11 @@ jobs:
           CODE=$(curl -sS --max-time 20 -o /tmp/fsp-no-auth-meta.json -w '%{http_code}' "$URL?route=%2Fapi%2Fmeta%2Fconnection-check")
           test "$CODE" = "401"
           grep -q '"error":"Authentication required"' /tmp/fsp-no-auth-meta.json
+      - name: Verify auto-mark route rejects unauthenticated requests
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://vzcpzhobtfwhurcsppdl.supabase.co/functions/v1/fsp-connect-staging-api"
+          CODE=$(curl -sS --max-time 20 -o /tmp/fsp-no-auth-auto-read.json -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{"action":"auto_mark_read","observed_last_message_at":"2026-10-29T13:55:00Z","observed_unread_count":1}' "$URL?route=%2Fapi%2Fconversations%2Faaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa%2Factions")
+          test "$CODE" = "401"
+          grep -q '"error":"Authentication required"' /tmp/fsp-no-auth-auto-read.json
