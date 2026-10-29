@@ -1,0 +1,36 @@
+name: FSP Connect 2.1 Stage B Inbound Webhook QA
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - 'supabase/functions/fsp-whatsapp-webhook/**'
+      - 'tests/stage-b-webhook.test.mjs'
+      - '.github/workflows/stage-b-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test Meta Webhook signature, challenge, and durable ingestion behavior
+        run: node --test tests/stage-b-webhook.test.mjs
+      - name: Verify deployed webhook health is inbound-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://vzcpzhobtfwhurcsppdl.supabase.co/functions/v1/fsp-whatsapp-webhook?health=1"
+          CODE=$(curl --max-time 20 -fsS -o /tmp/fsp-stage-b-health.json -w '%{http_code}' "$URL")
+          test "$CODE" = "200"
+          grep -q '"mode":"inbound-only"' /tmp/fsp-stage-b-health.json
+          grep -q '"sending":false' /tmp/fsp-stage-b-health.json
