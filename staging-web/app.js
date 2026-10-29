@@ -42,7 +42,7 @@ async function ensureSession(){
 }
 async function api(path,method='GET',body){
  const bearer=await ensureSession();
- const r=await fetch(CONFIG.api+path,{method,headers:{'authorization':'Bearer '+bearer,'apikey':CONFIG.publishableKey,'content-type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});
+ const r=await fetch(CONFIG.api+'?route='+encodeURIComponent(path),{method,headers:{'authorization':'Bearer '+bearer,'apikey':CONFIG.publishableKey,'content-type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});
  let result={};try{result=await r.json()}catch{}
  if(r.status===401){clearSession();showAuth('Your session has expired. Please sign in again.');throw new Error('Session expired')}
  if(r.status===403)throw new Error('Your account is not authorised for this action');
