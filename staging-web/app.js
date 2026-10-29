@@ -49,8 +49,15 @@ async function ensureSession(){
  if(!state.session)throw new Error('Sign in required');
  if(isExpired()){
   if(!state.session.refresh_token)throw new Error('Session expired');
-  const s=await authCall('token?grant_type=refresh_token','POST',{refresh_token:state.session.refresh_token});
-  saveSession({...s,expires_at:Math.floor(Date.now()/1000)+Number(s.expires_in||3600)});
+  if(!refreshPending){
+   const epoch=sessionEpoch;
+   refreshPending=(async()=>{
+    const s=await authCall('token?grant_type=refresh_token','POST',{refresh_token:state.session.refresh_token});
+    if(sessionEpoch!==epoch||!state.session)throw new Error('Sign in required');
+    saveSession({...s,expires_at:Math.floor(Date.now()/1000)+Number(s.expires_in||3600)});
+   })().finally(()=>{refreshPending=null});
+  }
+  await refreshPending;
  }
  return state.session.access_token;
 }
