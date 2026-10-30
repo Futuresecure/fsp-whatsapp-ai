@@ -442,6 +442,11 @@ function renderSettings(){const op=state.operator||{};
     <button type="button" class="btn" id="metaCheckBtn">Check Meta Connection</button>
     <p id="metaCheckResult" role="status" aria-live="polite" style="white-space:pre-line;margin-top:12px"></p>
     <hr style="border:0;border-top:1px solid #e2e8f0;margin:18px 0" />
+    <h3 style="margin:0 0 8px">Production Go-Live Gates — Stage 5</h3>
+    <p>Read-only release assessment. All approvals and restore tests must pass separately. This cannot enable customer messaging.</p>
+    <button type="button" class="btn" id="productionGatesBtn">Check Production Gates</button>
+    <p id="productionGatesResult" role="status" aria-live="polite" style="white-space:pre-line;margin-top:12px"></p>
+    <hr style="border:0;border-top:1px solid #e2e8f0;margin:18px 0" />
     <h3 style="margin:0 0 8px">Production Manual Reply Readiness</h3>
     <p>Read-only rollout check. This does not unlock customer messaging.</p>
     <button type="button" class="btn" id="replyReadinessBtn">Check Reply Readiness</button>
@@ -458,6 +463,32 @@ function renderSettings(){const op=state.operator||{};
     <p id="alertCheckResult" role="status" aria-live="polite" style="white-space:pre-line;margin-top:12px">Checking internal monitoring…</p>
   </section>` : '') );
  $('settingsLogout').onclick=signOut;
+ const productionGates=$('productionGatesBtn');
+ if(productionGates)productionGates.onclick=async()=>{
+  productionGates.disabled=true;
+  const panel=$('productionGatesResult');
+  panel.textContent='Checking live release prerequisites…';
+  try{
+   const data=await api('/api/production-gates');
+   const counts=data.results||{};
+   const lines=[
+    'Customer-wide Sending: OFF (test recipient only)',
+    'Production Ready: NO',
+    'Passed: '+Number(counts.pass||0)+'  ·  Blocked: '+Number(counts.blocked||0)+
+      '  ·  Not verified: '+Number(counts.unverified||0),
+    'Release Gate Details:'
+   ];
+   for(const gate of data.gates||[]){
+    const stateText=gate.status==='pass'?'PASS':gate.status==='blocked'?'BLOCKED':'NOT VERIFIED';
+    lines.push('• '+stateText+' — '+String(gate.title||'Release prerequisite'));
+    if(gate.status!=='pass'&&gate.detail)lines.push('    '+String(gate.detail));
+   }
+   lines.push('This report does not approve or enable sending.');
+   if(state.page==='Settings')panel.textContent=lines.join('\n');
+  }catch(e){
+   if(state.page==='Settings')panel.textContent='Release review unavailable: '+String(e.message||'Connection error');
+  }finally{if(state.page==='Settings')productionGates.disabled=false}
+ };
  const readiness=$('replyReadinessBtn');
  if(readiness)readiness.onclick=async()=>{
   readiness.disabled=true;
