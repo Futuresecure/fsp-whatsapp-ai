@@ -6,6 +6,8 @@ import {evaluateProductionReadiness} from './release-gates.mjs';
 import {isActiveOperator,hasWorkspaceAccess,canViewConversation,canPerformConversationAction,canInspectAdminSettings,visibleConversationScope} from './operator-permissions.mjs';
 import {summarizeRecoveryPreflight} from './recovery-core.mjs';
 import {summarizeOperatorCoverage} from './operator-readiness.mjs';
+import {summarizeRetentionInventory} from './privacy-core.mjs';
+import {assessIncidentReadiness} from './incident-core.mjs';
 import {checkMetaConnection} from './meta-connection.mjs';
 import {assessReply,sendGraphText,executeRestrictedReply} from './reply-core.mjs';
 import {resolveFspRoute} from './route.mjs';
@@ -105,6 +107,31 @@ async function getApi(req:Request,path:string,op:any,url:URL):Promise<Response>{
     )));
     const counts=Object.fromEntries(roles.map((role,i)=>[role,result[i].count]));
     return respond(200,summarizeOperatorCoverage(counts));
+  }
+  if(path==='/api/retention-inventory'){
+    if(!canInspectAdminSettings(op))return fail(403,'Administrator access required');
+    const result=await callSupabase<any>('/rest/v1/rpc/fsp_retention_inventory',{
+      method:'POST',body:{}
+    });
+    return respond(200,summarizeRetentionInventory(result.data));
+  }
+  if(path==='/api/incident-readiness'){
+    if(!canInspectAdminSettings(op))return fail(403,'Administrator access required');
+    // Internal-only metrics; no PII, provider tokens, incident mutations or external paging.
+    const [alerts,critical,backlog,heartbeat]=await Promise.all([
+      rest('fsp_operational_alerts',
+        '?select=alert_key&status=eq.open&limit=1',{prefer:'count=exact'}),
+      rest('fsp_operational_alerts',
+        '?select=alert_key&status=eq.open&severity=eq.critical&limit=1',{prefer:'count=exact'}),
+      getCount('fsp_webhook_events','&state=in.(queued,processing,dead)'),
+      rest('fsp_monitor_heartbeat',
+        '?select=last_run_at&monitor_key=eq.stage4_reply_and_webhook&limit=1')
+    ]);
+    return respond(200,assessIncidentReadiness({
+      openAlerts:alerts.count,criticalAlerts:critical.count,
+      webhookBacklog:backlog,
+      monitorLastRun:(heartbeat.data as any[])?.[0]?.last_run_at??null
+    }));
   }
   if(path==='/api/recovery-preflight'){
     if(!canInspectAdminSettings(op))return fail(403,'Administrator access required');
