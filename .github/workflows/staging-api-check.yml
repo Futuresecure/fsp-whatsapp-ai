@@ -15,6 +15,8 @@ on:
       - 'tests/stage6-operator-coverage.test.mjs'
       - 'tests/stage7-privacy-incident.test.mjs'
       - 'tests/stage8-contact-management.test.mjs'
+      - 'tests/stage8-analytics.test.mjs'
+      - 'supabase/migrations/20261030075354_stage8_secure_analytics_summary.sql'
       - 'supabase/migrations/20261030074611_stage8_contact_explicit_consent_audit.sql'
       - 'supabase/migrations/20261030065915_stage7_readonly_retention_inventory.sql'
       - 'supabase/migrations/20261030063553_stage6_monitoring_explicit_deny_client_rls.sql'
@@ -85,6 +87,8 @@ jobs:
         run: node --test tests/stage7-privacy-incident.test.mjs
       - name: Test Stage 8 safe contact import and explicit consent controls
         run: node --test tests/stage8-contact-management.test.mjs
+      - name: Test privacy-safe Analytics summaries and current provider statuses
+        run: node --test tests/stage8-analytics.test.mjs
       - name: Check browser JavaScript syntax
         run: node --check staging-web/app.js
       - name: Verify staging API liveness (no credentials)
@@ -127,6 +131,14 @@ jobs:
           CODE=$(curl -sS --max-time 20 -o /tmp/fsp-stage6-coverage-noauth.json -w '%{http_code}' "$URL?route=%2Fapi%2Foperator-coverage")
           test "$CODE" = "401"
           grep -q '"error":"Authentication required"' /tmp/fsp-stage6-coverage-noauth.json
+      - name: Verify Analytics rejects unauthenticated access
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://vzcpzhobtfwhurcsppdl.supabase.co/functions/v1/fsp-connect-staging-api"
+          CODE=$(curl -sS --max-time 20 -o /tmp/fsp-analytics-noauth.json -w '%{http_code}' "$URL?route=%2Fapi%2Fanalytics%3Fdays%3D30")
+          test "$CODE" = "401"
+          grep -q '"error":"Authentication required"' /tmp/fsp-analytics-noauth.json
       - name: Verify contact mutations reject unauthenticated requests
         shell: bash
         run: |
