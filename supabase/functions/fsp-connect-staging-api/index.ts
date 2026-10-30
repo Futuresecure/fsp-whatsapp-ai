@@ -196,6 +196,18 @@ async function postRestrictedReply(req:Request,conversationId:string,op:any):Pro
         return Array.isArray(r.data)&&r.data.length===1;
       }catch(e){if(e instanceof Error && e.message.includes('(409)'))return false;throw e;}
     },
+    admit:async()=>{
+      // Transactional database gate; no admission means NO Meta API request.
+      // The service role is the only database principal allowed to call the RPC.
+      const result=await callSupabase<any>('/rest/v1/rpc/fsp_reserve_reply_slot',{
+        method:'POST',
+        body:{p_request_id:reqId,p_operator_id:op.user_id,p_conversation_id:conversationId}
+      });
+      if(!result.data || typeof result.data!=='object' ||
+         typeof result.data.allowed!=='boolean')
+        throw new Error('Invalid reply admission confirmation');
+      return result.data;
+    },
     send:async()=>await sendGraphText({phoneNumberId:conf.phoneNumberId,
       recipient:checked.recipient,text:checked.text,token:conf.token}),
     record:async(_input:any,messageId:string)=>{
@@ -214,7 +226,8 @@ async function postRestrictedReply(req:Request,conversationId:string,op:any):Pro
         prefer:'return=minimal'});
     },
     markFailure:async(_requestId:string,reason:string)=>{
-      const state=reason==='rejected'?'rejected':reason==='persist_failed'?'persist_failed':'unknown';
+      const state=reason==='persist_failed'?'persist_failed':
+        reason==='unknown'?'unknown':'rejected';
       await callSupabase('/rest/v1/fsp_outbound_requests?request_id=eq.'+escapeQuery(reqId),{
         method:'PATCH',body:{state,error_category:reason,updated_at:new Date().toISOString()},
         prefer:'return=minimal'});
@@ -222,6 +235,8 @@ async function postRestrictedReply(req:Request,conversationId:string,op:any):Pro
   });
   if(result.ok)return respond(200,{ok:true,message_id:result.messageId});
   if(result.warning)return respond(202,{warning:result.warning});
+  if(result.status===429)return respond(429,{error:result.error,
+    retry_after_seconds:result.retryAfterSeconds||60});
   return fail(result.status||503,result.error||'Unable to send');
 }
 
