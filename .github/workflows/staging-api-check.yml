@@ -9,6 +9,7 @@ on:
       - 'tests/stage-p1-inbox.test.mjs'
       - 'tests/stage-p1-reply-readiness.test.mjs'
       - 'tests/security-audit.test.mjs'
+      - 'tests/staging-api.test.mjs'
       - 'scripts/security-audit.mjs'
       - 'staging-web/style.css'
       - 'tests/stage-b-auto-read.test.mjs'
@@ -59,6 +60,14 @@ jobs:
           CODE=$(curl -sS --max-time 20 -o /tmp/fsp-health.json -w '%{http_code}' "$URL?route=%2Fhealthz")
           test "$CODE" = "200"
           grep -q '"messaging":"disabled"' /tmp/fsp-health.json
+      - name: Verify approved dashboard CORS origin (no wildcard)
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://vzcpzhobtfwhurcsppdl.supabase.co/functions/v1/fsp-connect-staging-api"
+          curl -sSI --max-time 20 -X OPTIONS -H 'Origin: https://futuresecureproviders.com' -H 'Access-Control-Request-Method: POST' "$URL?route=%2Fapi%2Fme" > /tmp/fsp-cors.txt
+          grep -qi '^access-control-allow-origin: https://futuresecureproviders.com' /tmp/fsp-cors.txt
+          if grep -q '^access-control-allow-origin: \*' /tmp/fsp-cors.txt; then exit 1; fi
       - name: Verify protected route rejects unauthenticated requests
         shell: bash
         run: |
