@@ -9,6 +9,7 @@ import {summarizeOperatorCoverage} from './operator-readiness.mjs';
 import {summarizeRetentionInventory} from './privacy-core.mjs';
 import {assessIncidentReadiness} from './incident-core.mjs';
 import {validateContact,validateBulkContacts,validateConsentEvidence,allowContactMutation} from './contact-core.mjs';
+import {sanitizeAnalytics} from './analytics-core.mjs';
 import {checkMetaConnection} from './meta-connection.mjs';
 import {assessReply,sendGraphText,executeRestrictedReply} from './reply-core.mjs';
 import {resolveFspRoute} from './route.mjs';
@@ -219,6 +220,15 @@ async function getApi(req:Request,path:string,op:any,url:URL):Promise<Response>{
       database_rate_gate:true,production_customer_sending:false});
   }
   if(path==='/api/health')return respond(200,{authenticated:true,connected:true,sending:false,aiAutoReply:false,broadcast:false});
+  if(path==='/api/analytics'){
+    const raw=url.searchParams.get('days')||'30';
+    if(!['7','30','90'].includes(raw))return fail(400,'Reporting window must be 7, 30 or 90 days');
+    const report=await callSupabase<any>('/rest/v1/rpc/fsp_analytics_summary',{
+      method:'POST',body:{p_operator_id:op.user_id,p_days:Number(raw)}
+    });
+    const checked=sanitizeAnalytics(report.data);
+    return checked.ok?respond(200,checked):fail(503,'Analytics response unavailable');
+  }
   if(path==='/api/dashboard'){
     const [conversations,unread,contacts,messages]=await Promise.all([
       getCount('whatsapp_conversations',scope),
