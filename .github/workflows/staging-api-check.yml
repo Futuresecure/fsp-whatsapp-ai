@@ -86,6 +86,14 @@ jobs:
           CODE=$(curl -sS --max-time 20 -o /tmp/fsp-unauth.json -w '%{http_code}' "$URL?route=%2Fapi%2Fme")
           test "$CODE" = "401"
           grep -q '"error":"Authentication required"' /tmp/fsp-unauth.json
+      - name: Verify global Inbox search cannot be queried without login
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://vzcpzhobtfwhurcsppdl.supabase.co/functions/v1/fsp-connect-staging-api"
+          CODE=$(curl -sS --max-time 20 -o /tmp/fsp-search-denied.json -w '%{http_code}' "$URL?route=%2Fapi%2Fconversations&q=customer&filter=all&limit=5")
+          test "$CODE" = "401"
+          grep -q '"error":"Authentication required"' /tmp/fsp-search-denied.json
       - name: Verify Meta connection check rejects unauthenticated calls
         shell: bash
         run: |
