@@ -18,6 +18,16 @@ const sessionName='fsp-connect-21-staging-tab-session';
 let refreshPending=null;
 let sessionEpoch=0;
 const testReplyAttempted=new Set(); // one reply attempt per conversation per page session
+let inboxRefreshTimer=null;
+let inboxRefreshBusy=false;
+const INBOX_POLL_INTERVAL_MS=15000;
+function stopInboxAutoRefresh(){
+ if(inboxRefreshTimer!==null){clearInterval(inboxRefreshTimer);inboxRefreshTimer=null;}
+}
+function startInboxAutoRefresh(){
+ stopInboxAutoRefresh();
+ inboxRefreshTimer=setInterval(()=>{void refreshInboxQuietly()},INBOX_POLL_INTERVAL_MS);
+}
 function notice(text,secure=false){return `<div class="notice ${secure?'secure':''}">${h(text)}</div>`}
 let toastTimer;
 function toast(msg){$('toast').textContent=msg;$('toast').classList.remove('hide');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.add('hide'),4000)}
@@ -87,6 +97,7 @@ async function login(email,password){
  }
 }
 async function signOut(){
+ stopInboxAutoRefresh();
  const current=state.session;
  clearSession();showAuth();
  if(current?.access_token){try{await authCall('logout','POST',null,current.access_token)}catch{}}
@@ -101,6 +112,7 @@ function header(name,desc,button='Refresh'){return `<div class="pagehead"><div><
 function content(html){$('mainContent').innerHTML=html;const b=$('refreshBtn');if(b)b.onclick=()=>navigate(state.page,true)}
 async function navigate(name,force=false){
  if(!state.operator)return;
+ stopInboxAutoRefresh();
  state.page=name;nav();
  if(name==='Overview'||name==='Analytics'){
   content(header(name,'Actual FSP Connect database activity · no fictional data')+'<div class="loading">Loading real data…</div>');
