@@ -10,6 +10,7 @@ export function inspectReplyRollout({accessToken,phoneNumberId,testRecipient,tes
   operator_authorization:true,
   incoming_24h_window_enforced:true,
   idempotent_claim_before_send:true,
+  staging_durable_rate_gate_implemented:true,
   production_customer_sending:false
  };
  return {
@@ -19,7 +20,7 @@ export function inspectReplyRollout({accessToken,phoneNumberId,testRecipient,tes
   checks,
   blockers:[
    'Production manual reply endpoint is not deployed',
-   'Production-specific permissions, rate limits and abuse monitoring are not approved',
+   'Production-specific permissions, rate policy review and abuse monitoring are not approved',
    'Controlled non-test customer pilot and rollback verification are pending'
   ]
  };
