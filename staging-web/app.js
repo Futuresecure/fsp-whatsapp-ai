@@ -136,15 +136,38 @@ function renderOverview(name){const s=state.summary||{};
  `<div class="twocol"><section class="card modulebox"><h2>Communication workspace</h2><p>Read authorised conversations, inspect message history and manage internal operator actions. Manual test replies are restricted to the allowlisted number.</p><button id="openInbox" class="primary">Open Inbox</button></section><section class="card modulebox"><h2>Safety controls</h2><div class="inforow"><span>WhatsApp outgoing</span><b class="pill amber">Test allowlist only</b></div><div class="inforow"><span>AI Auto Reply</span><b class="pill amber">OFF</b></div><div class="inforow"><span>Broadcast / Automation</span><b class="pill amber">OFF</b></div></section></div>`);
  $('openInbox').onclick=()=>navigate('Inbox');
 }
-function titleFor(c){const d=state.details?.id===c.id?state.details.contact:null;return d?.display_name||d?.profile_name||'Conversation '+c.id.slice(0,8)}
+function titleFor(c){
+ const d=state.details?.id===c.id?state.details.contact:null;
+ return c.contact_name||d?.display_name||d?.profile_name||c.contact_wa_id||'Conversation '+c.id.slice(0,8);
+}
+function conversationMatches(c,q,filter){
+ if(filter==='unread'&&!(Number(c.unread_count)>0))return false;
+ if(filter==='open'&&c.status!=='open')return false;
+ if(filter==='resolved'&&c.status!=='resolved')return false;
+ if(!q)return true;
+ return [c.id,c.status,titleFor(c),c.contact_wa_id].some(v=>String(v||'').toLowerCase().includes(q));
+}
 function renderConversationList(){const node=$('conversationList');if(!node)return;
- node.replaceChildren();const q=($('convSearch')?.value||'').trim().toLowerCase();const items=state.convs.filter(c=>c.id.toLowerCase().includes(q)||c.status.toLowerCase().includes(q)||(state.details?.id===c.id&&titleFor(c).toLowerCase().includes(q)));
- if(!items.length){node.innerHTML='<div class="empty">No authorized conversations found.</div>';return}
- items.forEach(c=>{let b=document.createElement('button');b.type='button';b.className='conv'+(state.chosen===c.id?' active':'');
- const top=document.createElement('div');top.className='convtop';const title=document.createElement('b');title.textContent=titleFor(c);const time=document.createElement('small');time.textContent=date(c.last_message_at);top.append(title,time);
- const status=document.createElement('p');status.textContent='Status: '+c.status;
- const bot=document.createElement('div');bot.className='btnrow';const pill=document.createElement('span');pill.className='pill '+(c.unread_count?'blue':'');pill.textContent=c.unread_count?c.unread_count+' unread':'No unread';bot.appendChild(pill);
- b.append(top,status,bot);b.onclick=()=>openConversation(c.id);node.appendChild(b)});
+ node.replaceChildren();
+ const q=($('convSearch')?.value||'').trim().toLowerCase();
+ const filter=$('convFilter')?.value||'all';
+ const items=state.convs.filter(c=>conversationMatches(c,q,filter));
+ const count=$('convCount');if(count)count.textContent=items.length+' of '+state.convs.length;
+ if(!items.length){node.innerHTML='<div class="empty">No matching conversations.</div>';return}
+ items.forEach(c=>{
+  const b=document.createElement('button');b.type='button';
+  b.className='conv'+(state.chosen===c.id?' active':'')+(Number(c.unread_count)>0?' unread':'');
+  b.setAttribute('aria-label',titleFor(c)+(c.unread_count?' · '+c.unread_count+' unread':''));
+  const top=document.createElement('div');top.className='convtop';
+  const title=document.createElement('b');title.textContent=titleFor(c);
+  const time=document.createElement('small');time.textContent=date(c.last_message_at);
+  top.append(title,time);
+  const status=document.createElement('p');status.textContent='Status: '+c.status+(c.contact_wa_id?' · +'+c.contact_wa_id:'');
+  const bot=document.createElement('div');bot.className='btnrow';
+  const pill=document.createElement('span');pill.className='pill '+(c.unread_count?'blue':'');
+  pill.textContent=c.unread_count?c.unread_count+' unread':'No unread';
+  bot.appendChild(pill);b.append(top,status,bot);b.onclick=()=>openConversation(c.id);node.appendChild(b);
+ });
 }
 async function renderInbox(){content(header('Inbox','Inbound messages and restricted manual test replies')+
  '<div class="inbox"><section class="convcol"><div class="colhead"><h2>Conversations</h2><input class="input" id="convSearch" aria-label="Search conversations" placeholder="Search conversation…" style="margin-top:12px" /></div><div id="conversationList" class="convlist"></div></section><section class="chatcol"><div class="chathead"><div><b id="chatTitle">Select a conversation</b><div class="muted tiny" id="chatDesc">Private message history</div></div><div class="btnrow"><span class="pill amber">Test replies only</span><button type="button" class="btn" id="detailsBtn">Details</button></div></div><div class="chatbody" id="chatBody"><div class="empty">Select a conversation to view real messages.</div></div><div class="composer" id="replyComposer"><div class="disabledsend">Select an authorized test conversation to reply. Test-recipient allowlist and 24-hour reply window are enforced.</div></div></section><section class="contextcol"><div class="colhead"><h2>Conversation details</h2></div><div class="contextbody" id="contextBody"><p class="muted tiny">Select a conversation.</p></div></section></div>');
