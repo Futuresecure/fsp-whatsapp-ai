@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 
 const source = readFileSync(new URL('../staging-web/app.js', import.meta.url), 'utf8');
-const start = source.indexOf('async function openConversation(id){');
+const start = source.indexOf('function paintChatHistory(');
 const end = source.indexOf('\n/**\n * Manual Stage B2 test reply.', start);
 assert.ok(start > 0 && end > start, 'Open conversation implementation must remain testable');
 const implementation = source.slice(start, end);
