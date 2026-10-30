@@ -178,6 +178,26 @@ async function renderInbox(){content(header('Inbox','Incoming WhatsApp messages 
  if(state.chosen&&state.convs.some(c=>c.id===state.chosen))await openConversation(state.chosen);
  if(state.page==='Inbox')startInboxAutoRefresh();
 }
+function paintChatHistory(scrollToEnd=false){
+ const box=$('chatBody');if(!box)return;
+ const wasNearBottom=box.scrollHeight-box.scrollTop-box.clientHeight<100;
+ const oldScroll=box.scrollTop;
+ box.replaceChildren();
+ if(!state.messages.length)box.innerHTML='<div class="empty">No messages recorded for this conversation.</div>';
+ for(const msg of state.messages){
+  const el=document.createElement('div');el.className='msg'+(msg.direction==='outbound'?' out':'');
+  const b=document.createElement('div');b.className='bubble';
+  b.textContent=msg.body??('['+msg.message_type+' message]');
+  const small=document.createElement('div');small.className='msgmeta';
+  small.textContent=msg.direction+' · '+msg.provider_status+' · '+date(msg.provider_timestamp||msg.created_at);
+  el.append(b,small);box.appendChild(el);
+ }
+ if(scrollToEnd||wasNearBottom)box.scrollTop=box.scrollHeight;
+ else box.scrollTop=oldScroll;
+}
+function messageSignature(messages){
+ return messages.map(m=>[m.id,m.provider_status,m.body].join(':')).join('|');
+}
 async function openConversation(id){state.chosen=id;renderConversationList();
  $('chatTitle').textContent='Loading conversation…';$('chatBody').innerHTML='<div class="loading">Loading messages…</div>';
  try{
@@ -187,13 +207,7 @@ async function openConversation(id){state.chosen=id;renderConversationList();
   const who=d.data.contact?.display_name||d.data.contact?.profile_name||d.data.contact?.wa_id||id;
   $('chatTitle').textContent=who;
   $('chatDesc').textContent=(d.data.contact?.wa_id||'')+' · '+d.data.status;
-  const box=$('chatBody');box.replaceChildren();
-  if(!state.messages.length)box.innerHTML='<div class="empty">No messages recorded for this conversation.</div>';
-  state.messages.forEach(msg=>{const el=document.createElement('div');el.className='msg'+(msg.direction==='outbound'?' out':'');
-   const b=document.createElement('div');b.className='bubble';b.textContent=msg.body??('['+msg.message_type+' message]');
-   const small=document.createElement('div');small.className='msgmeta';small.textContent=msg.direction+' · '+msg.provider_status+' · '+date(msg.provider_timestamp||msg.created_at);
-   el.append(b,small);box.appendChild(el)});
-  box.scrollTop=box.scrollHeight;renderContext();renderReplyComposer();renderConversationList();
+  paintChatHistory(true);renderContext();renderReplyComposer();renderConversationList();
   // Opening a conversation counts as reading it internally, but only after messages
   // have loaded. The backend verifies the exact unread snapshot before clearing.
   if(Number(d.data.unread_count)>0 && state.operator?.role!=='viewer'){
