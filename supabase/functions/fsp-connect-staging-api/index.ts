@@ -98,6 +98,24 @@ async function getApi(req:Request,path:string,op:any,url:URL):Promise<Response>{
       testSendingEnabled:Deno.env.get('FSP_META_SENDING_ENABLED')==='true'
     }));
   }
+  if(path==='/api/reply-operations'){
+    if(op.role!=='admin')return fail(403,'Administrator access required');
+    // Counts only; never return phone numbers, message text, or access tokens.
+    const since=escapeQuery(new Date(Date.now()-24*60*60*1000).toISOString());
+    const base='?select=request_id&created_at=gte.'+since;
+    const summary=async(filter:string)=>{
+      const result=await rest('fsp_outbound_requests',base+filter+'&limit=1',{prefer:'count=exact'});
+      return result.count??(result.data as any[])?.length??0;
+    };
+    const [attempts,accepted,unknown,persistFailed,rateLimited]=await Promise.all([
+      summary(''),summary('&state=eq.accepted'),summary('&state=eq.unknown'),
+      summary('&state=eq.persist_failed'),summary('&error_category=eq.rate_limited')
+    ]);
+    return respond(200,{environment:'staging',mode:'test_recipient_only',
+      window_hours:24,attempts,accepted,unknown,persist_failed:persistFailed,
+      rate_limited:rateLimited,needs_review:unknown+persistFailed,
+      database_rate_gate:true,production_customer_sending:false});
+  }
   if(path==='/api/health')return respond(200,{authenticated:true,connected:true,sending:false,aiAutoReply:false,broadcast:false});
   if(path==='/api/dashboard'){
     const [conversations,unread,contacts,messages]=await Promise.all([
