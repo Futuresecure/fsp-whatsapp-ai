@@ -138,6 +138,10 @@ async function navigate(name,force=false){
    state.inboxHasMore=result.has_more===true;
    await renderInbox();
   }catch(e){if(state.page==='Inbox')renderError(e)}
+ }else if(name==='Templates'){
+  content(header('Templates','Provider-verified read-only Meta template inventory')+'<div class="loading">Checking Meta-approved templates…</div>');
+  try{const result=await api('/api/templates');if(state.page==='Templates')renderTemplates(result)}
+  catch(e){if(state.page==='Templates')renderError(e)}
  }else if(name==='Contacts'){
   content(header(name,'Contacts visible to your operator role')+'<div class="loading">Loading contacts…</div>');
   try{state.contacts=(await api('/api/contacts?limit=100')).data||[];state.contactsHasMore=state.contacts.length===100;renderContacts()}catch(e){renderError(e)}
@@ -193,6 +197,25 @@ function renderAnalytics(report){
   const a=document.createElement('a');a.href=url;a.download='fsp-connect-daily-analytics-'+analyticsDays+'d.csv';
   document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
  };
+}
+
+function renderTemplates(payload){
+ const templates=payload?.templates||[];
+ const statuses=['APPROVED','PENDING','REJECTED','PAUSED','DISABLED','UNKNOWN'];
+ const statusCounts=Object.fromEntries(statuses.map(s=>[s,templates.filter(t=>t.status===s).length]));
+ const rows=templates.map(t=>'<tr><td>'+h(t.name)+'</td><td>'+h(t.language)+'</td><td>'+h(t.category)+
+  '</td><td>'+h(t.status)+'</td><td>'+h(t.body_preview||'—')+'</td></tr>').join('');
+ content(header('Templates','Meta WhatsApp Business Account · Read-only provider status')+
+  notice('Only Meta can approve templates. No template send, create, edit or delete is enabled through this staging page.')+
+  '<section class="card"><h2>Meta Connection</h2><p>'+
+  (payload?.connected?'Provider inventory accessible.':'Provider lookup not available: '+h(payload?.error||'No WABA configuration'))+
+  '</p><p>Approved: '+statusCounts.APPROVED+' · Pending: '+statusCounts.PENDING+
+  ' · Rejected: '+statusCounts.REJECTED+' · Paused: '+statusCounts.PAUSED+'</p>'+
+  (payload?.truncated?'<p class="muted">More than 100 templates may exist; this view shows the first 100.</p>':'')+'</section>'+
+  '<section class="card"><h2>Existing Provider Templates</h2>'+
+  (templates.length?'<div style="overflow:auto"><table class="data-table"><thead><tr><th>Template</th><th>Language</th><th>Category</th><th>Meta Status</th><th>Body Preview</th></tr></thead><tbody>'+rows+'</tbody></table></div>':
+    '<div class="empty">No templates returned by Meta. Check access credentials or create/approve templates in Meta Business Manager.</div>')+
+  '</section>');
 }
 function titleFor(c){
  const d=state.details?.id===c.id?state.details.contact:null;
