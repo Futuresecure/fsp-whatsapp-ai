@@ -8,6 +8,7 @@ import {summarizeRecoveryPreflight} from './recovery-core.mjs';
 import {summarizeOperatorCoverage} from './operator-readiness.mjs';
 import {summarizeRetentionInventory} from './privacy-core.mjs';
 import {assessIncidentReadiness} from './incident-core.mjs';
+import {validateContact,validateBulkContacts,validateConsentEvidence,allowContactMutation} from './contact-core.mjs';
 import {checkMetaConnection} from './meta-connection.mjs';
 import {assessReply,sendGraphText,executeRestrictedReply} from './reply-core.mjs';
 import {resolveFspRoute} from './route.mjs';
@@ -244,13 +245,13 @@ async function getApi(req:Request,path:string,op:any,url:URL):Promise<Response>{
   }
   if(path==='/api/contacts'){
     if(allowAll(op)){
-      const {data}=await rest('whatsapp_contacts','?select=id,wa_id,display_name,profile_name,language_code,tags,last_message_at&order=last_message_at.desc.nullslast'+pagination);
+      const {data}=await rest('whatsapp_contacts','?select=id,wa_id,display_name,profile_name,language_code,tags,opted_in,opted_out_at,last_message_at&order=last_message_at.desc.nullslast'+pagination);
       return respond(200,{data,limit,offset});
     }
     const {data:convs}=await rest('whatsapp_conversations','?select=contact_id'+scope+'&limit=1000');
     const ids=[...new Set((convs as any[]).map(c=>c.contact_id))].filter(isUUID);
     if(!ids.length)return respond(200,{data:[]});
-    const {data}=await rest('whatsapp_contacts','?select=id,wa_id,display_name,profile_name,language_code,tags,last_message_at&id=in.('+ids.join(',')+')'+pagination);
+    const {data}=await rest('whatsapp_contacts','?select=id,wa_id,display_name,profile_name,language_code,tags,opted_in,opted_out_at,last_message_at&id=in.('+ids.join(',')+')'+pagination);
     return respond(200,{data,limit,offset});
   }
   const match=/^\/api\/conversations\/([0-9a-f-]+)(?:\/(messages))?$/.exec(path);
@@ -360,7 +361,86 @@ async function postRestrictedReply(req:Request,conversationId:string,op:any):Pro
   return fail(result.status||503,result.error||'Unable to send');
 }
 
+async function postContactAdministration(req:Request,path:string,op:any):Promise<Response>{
+  if(!allowContactMutation(op))return fail(403,'Only active admins/managers can manage contacts');
+  const length=Number(req.headers.get('content-length')||0);
+  if(length>100000)return fail(413,'Contact request too large');
+  const raw=await req.text();
+  if(raw.length>100000)return fail(413,'Contact request too large');
+  let body:any;try{body=JSON.parse(raw)}catch{return fail(400,'Invalid JSON')}
+  if(!body||typeof body!=='object'||Array.isArray(body))return fail(400,'Invalid contact request');
+  const match=/^\/api\/contacts\/([0-9a-f-]{36})$/i.exec(path);
+  if(path==='/api/contacts'){
+    if(body.action==='create'){
+      const valid=validateContact(body,{mode:'create'});
+      if(!valid.ok)return fail(400,valid.error);
+      const {data:previous}=await rest('whatsapp_contacts',
+       '?select=id&wa_id=eq.'+escapeQuery(valid.data.wa_id)+'&limit=1');
+      if((previous as any[])?.length)return fail(409,'WhatsApp number already exists');
+      const r=await callSupabase<any[]>('/rest/v1/whatsapp_contacts',{
+        method:'POST',body:valid.data,prefer:'return=representation'
+      });
+      const row=(r.data as any[])?.[0];
+      if(!row?.id)return fail(503,'Contact insertion not confirmed');
+      await callSupabase('/rest/v1/fsp_operator_audit',{
+        method:'POST',body:{operator_id:op.user_id,action:'contact_create',
+         details:{contact_id:row.id,consent:'not_granted'}},prefer:'return=minimal'
+      });
+      return respond(201,{ok:true,contact_id:row.id,consent:false});
+    }
+    if(body.action==='import'){
+      const valid=validateBulkContacts(body.contacts);
+      if(!valid.ok)return fail(400,valid.error);
+      // Exactly one batch; no provider sending, no overwrite of existing contact or opt-in.
+      const result=await callSupabase<any[]>('/rest/v1/whatsapp_contacts?on_conflict=wa_id',{
+        method:'POST',body:valid.data,prefer:'resolution=ignore-duplicates,return=representation'
+      });
+      const inserted=Array.isArray(result.data)?result.data.length:0;
+      await callSupabase('/rest/v1/fsp_operator_audit',{
+        method:'POST',body:{operator_id:op.user_id,action:'contact_csv_import',
+         details:{received:body.contacts.length,inserted,duplicate_in_file:valid.duplicates_in_file,
+          existing_skipped:valid.data.length-inserted,consent:'not_granted'}},prefer:'return=minimal'
+      });
+      return respond(200,{ok:true,received:body.contacts.length,inserted,
+       duplicate_in_file:valid.duplicates_in_file,existing_skipped:valid.data.length-inserted,
+       consent:false});
+    }
+    return fail(400,'Unsupported contact action');
+  }
+  if(!match||!isUUID(match[1]))return fail(404,'Contact not found');
+  const id=match[1];
+  const {data:existing}=await rest('whatsapp_contacts','?select=id,opted_in&id=eq.'+escapeQuery(id)+'&limit=1');
+  if(!(existing as any[])?.length)return fail(404,'Contact not found');
+  if(body.action==='update'){
+    const valid=validateContact(body,{mode:'update'});
+    if(!valid.ok)return fail(400,valid.error);
+    const r=await callSupabase<any[]>('/rest/v1/whatsapp_contacts?id=eq.'+escapeQuery(id),{
+      method:'PATCH',body:valid.data,prefer:'return=representation'
+    });
+    if((r.data as any[])?.length!==1)return fail(409,'Contact changed; refresh');
+    await callSupabase('/rest/v1/fsp_operator_audit',{
+      method:'POST',body:{operator_id:op.user_id,action:'contact_update',
+        details:{contact_id:id,fields:['display_name','language_code','tags']}},prefer:'return=minimal'
+    });
+    return respond(200,{ok:true,contact_id:id});
+  }
+  if(body.action==='opt_out'||body.action==='record_opt_in'){
+    const consent=body.action==='record_opt_in'?
+      validateConsentEvidence(body):{ok:true,source:'customer_request',proof_ref:null};
+    if(!consent.ok)return fail(400,consent.error);
+    const result=await callSupabase<any>('/rest/v1/rpc/fsp_record_contact_consent',{
+      method:'POST',body:{p_contact_id:id,p_operator_id:op.user_id,
+       p_event_type:body.action==='record_opt_in'?'opt_in':'opt_out',
+       p_source:consent.source,p_proof_ref:consent.proof_ref}
+    });
+    if(result.data?.ok!==true)return fail(403,'Consent update was not authorized or contact unavailable');
+    return respond(200,{ok:true,contact_id:id,opted_in:result.data.opted_in});
+  }
+  return fail(400,'Unsupported contact action');
+}
 async function postApi(req:Request,path:string,op:any):Promise<Response>{
+  if(path==='/api/contacts'||/^\/api\/contacts\/[0-9a-f-]{36}$/i.test(path))
+    return postContactAdministration(req,path,op);
   const replyMatch=/^\/api\/conversations\/([0-9a-f-]+)\/reply$/i.exec(path);
   if(replyMatch)return postRestrictedReply(req,replyMatch[1],op);
   const match=/^\/api\/conversations\/([0-9a-f-]+)\/actions$/.exec(path);
