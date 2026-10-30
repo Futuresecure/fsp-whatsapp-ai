@@ -4,6 +4,7 @@ import {inspectReplyRollout} from './reply-readiness.mjs';
 import {summarizeOperationalAlerts} from './operations-core.mjs';
 import {evaluateProductionReadiness} from './release-gates.mjs';
 import {isActiveOperator,hasWorkspaceAccess,canViewConversation,canPerformConversationAction,canInspectAdminSettings,visibleConversationScope} from './operator-permissions.mjs';
+import {summarizeRecoveryPreflight} from './recovery-core.mjs';
 import {checkMetaConnection} from './meta-connection.mjs';
 import {assessReply,sendGraphText,executeRestrictedReply} from './reply-core.mjs';
 import {resolveFspRoute} from './route.mjs';
@@ -92,6 +93,14 @@ async function getApi(req:Request,path:string,op:any,url:URL):Promise<Response>{
     };
     const result=await checkMetaConnection({config});
     return respond(200,result);
+  }
+  if(path==='/api/recovery-preflight'){
+    if(!canInspectAdminSettings(op))return fail(403,'Administrator access required');
+    // Private, service-role-only SQL RPC. Read-only and redacted; NOT a backup.
+    const result=await callSupabase<any>('/rest/v1/rpc/fsp_recovery_integrity_check',{
+      method:'POST',body:{}
+    });
+    return respond(200,summarizeRecoveryPreflight(result.data));
   }
   if(path==='/api/production-gates'){
     if(!canInspectAdminSettings(op))return fail(403,'Administrator access required');
