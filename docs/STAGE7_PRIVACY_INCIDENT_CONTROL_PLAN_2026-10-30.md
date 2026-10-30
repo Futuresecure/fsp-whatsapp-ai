@@ -66,3 +66,15 @@ No such policy is approved in this release. Do **not** schedule automatic deleti
 - Live SQL shows 9 age-bucket categories and `anon/authenticated` cannot EXECUTE RPC.
 - Simulated incident scenarios validated without mutating production messages, contacts, or secrets.
 - Formal privacy/retention and incident policies, real restore and controlled pilot require separate owner sign-off.
+
+## Deployment verification (30 October 2026)
+- Dedicated Supabase Edge API `fsp-connect-staging-api` **v20 ACTIVE**, webhook **v7 ACTIVE**.
+- Staging web GitHub Pages deployment at commit `eae54201dac52bd99b68c7ffe591bd4835f8f9ea`: **SUCCESS**.
+- GitHub staging API QA: **SUCCESS**, including Stage 7 regression suite, JavaScript syntax and no-login 401 checks for both endpoints.
+- Live retention RPC returned 9 recognized aggregate categories. Source tables include 1 contact, 1 conversation, 3 WhatsApp messages, 6 webhook events, 4 status events, 3 operator audit events, and 1 outbound request. 30/90/365 day age buckets were zero at this snapshot.
+- Live database permission audit: `anon=false`, `authenticated=false`, `service_role=true` for retention RPC execution.
+- Both pre-existing cron jobs remain active and their most recent runs succeeded.
+- Zero unresolved webhook events and zero open internal alerts at verification.
+- Supabase Security Advisor still reports `Leaked Password Protection Disabled`; GitHub repository remains public.
+- This release did **not** create a real off-site backup, test an independent restore, enable production customer replies or begin automated data deletion.
+- Both new Admin Settings checks still need a logged-in browser acceptance test.
