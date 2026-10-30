@@ -60,3 +60,25 @@ test('signature is cryptographically checked on exact raw bytes',async()=>{
 test('only recognized HTTP methods accepted',async()=>{
  const r=await handler().handle(new Request(url,{method:'DELETE'}));assert.equal(r.status,405);
 });
+
+test('public health reports inbound-only mode without exposing configuration',async()=>{
+ const {handle}=handler();
+ const r=await handle(new Request(url+'?health=1'));
+ assert.equal(r.status,200);
+ const data=await r.json();
+ assert.equal(data.service,'fsp-whatsapp-webhook');
+ assert.equal(data.status,'ready');
+ assert.equal(data.mode,'inbound-only');
+ assert.equal(data.sending,false);
+ assert.equal(JSON.stringify(data).includes(secret),false);
+ assert.equal(JSON.stringify(data).includes(verifyToken),false);
+});
+test('health remains available but clearly not configured when secrets are absent',async()=>{
+ const {handle}=handler({config:{ready:false,appSecret:'',verifyToken:''}});
+ const r=await handle(new Request(url+'?health=1'));
+ assert.equal(r.status,200);
+ const data=await r.json();
+ assert.equal(data.status,'not_configured');
+ assert.equal(data.mode,'inbound-only');
+ assert.equal(data.sending,false);
+});
