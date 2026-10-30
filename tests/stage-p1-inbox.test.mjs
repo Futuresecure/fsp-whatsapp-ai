@@ -46,9 +46,10 @@ function fixturePoll({newMessage=true,unread=1,hidden=false}={}){
  };
  const ctx={
   inboxRefreshBusy:false,
-  state:{page:'Inbox',operator:{role:'admin'},convs:[previous],chosen:id,details:{...previous},messages:oldMessages},
+  state:{page:'Inbox',operator:{role:'admin'},convs:[previous],chosen:id,details:{...previous},messages:oldMessages,inboxRequestVersion:1,inboxTotal:1},
   document:{visibilityState:hidden?'hidden':'visible'},
   $:key=>els[key]||null,
+  getInboxPath:()=>'/api/conversations?limit=50',
   renderConversationList:()=>counts.render++,
   renderContext:()=>{},
   paintChatHistory:()=>counts.paint++,
@@ -57,7 +58,7 @@ function fixturePoll({newMessage=true,unread=1,hidden=false}={}){
   toast:s=>counts.toast.push(s),
   api:async(path,method='GET',body)=>{
    if(method==='POST'){counts.posts.push(body);return {marked_read:true};}
-   if(path==='/api/conversations?limit=50')return {data:[contact]};
+   if(path==='/api/conversations?limit=50')return {data:[contact],total:1,has_more:false};
    if(path==='/api/conversations/'+id)return {data:{...contact}};
    if(path.endsWith('/messages?limit=100'))return {data:[...nextMessages].reverse()};
    throw new Error('Unexpected API: '+path);
