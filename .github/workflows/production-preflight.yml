@@ -1,0 +1,59 @@
+name: FSP Connect 2.1 Production Preflight (Verification Only)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [dev]
+    paths:
+      - 'docs/PRODUCTION_RELEASE_PLAN_2.1.md'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'supabase/functions/**'
+      - 'supabase/migrations/**'
+      - 'staging-web/**'
+      - '.github/workflows/production-preflight.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fsp-connect-production-preflight
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run production gate and webhook safety tests
+        run: |
+          node --test tests/stage5-production-gates.test.mjs
+          node --test tests/stage6-operator-matrix.test.mjs
+          node --test tests/stage6-recovery.test.mjs
+          node --test tests/stage6-operator-coverage.test.mjs
+          node --test tests/stage7-privacy-incident.test.mjs
+          node --test tests/stage8-contact-management.test.mjs
+          node --test tests/stage8-analytics.test.mjs
+          node --test tests/stage8-meta-templates.test.mjs
+          node --test tests/stage8-module-readiness.test.mjs
+          node --test tests/stage-b2-reply.test.mjs
+          node --test tests/stage-b-webhook.test.mjs
+          node --test tests/stage-b3-meta-connection.test.mjs
+          node --test tests/security-audit.test.mjs
+      - name: Check frontend syntax
+        run: node --check staging-web/app.js
+      - name: Scan tracked source
+        run: node scripts/security-audit.mjs
+      - name: Scan Git history
+        run: node scripts/history-security-audit.mjs
+      - name: Confirm verification-only release mode
+        run: |
+          grep -q 'NO-GO' docs/PRODUCTION_RELEASE_PLAN_2.1.md
+          echo 'Verification only: no deployment and no customer messaging.'
