@@ -488,6 +488,7 @@ function renderSettings(){const op=state.operator||{};
     'Rate limited: '+count(data.rate_limited),
     'Uncertain provider results: '+count(data.unknown),
     'Inbox persistence failures: '+count(data.persist_failed),
+    'Provider failed messages: '+count(data.provider_failed),
     'Needs manual review: '+count(data.needs_review),
     'Rate limit database gate: '+(data.database_rate_gate?'Active':'Unknown'),
     'Production customer sending: OFF'
