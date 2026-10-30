@@ -134,7 +134,7 @@ async function navigate(name,force=false){
   }catch(e){if(state.page==='Inbox')renderError(e)}
  }else if(name==='Contacts'){
   content(header(name,'Contacts visible to your operator role')+'<div class="loading">Loading contacts…</div>');
-  try{state.contacts=(await api('/api/contacts?limit=50')).data||[];renderContacts()}catch(e){renderError(e)}
+  try{state.contacts=(await api('/api/contacts?limit=100')).data||[];state.contactsHasMore=state.contacts.length===100;renderContacts()}catch(e){renderError(e)}
  }else if(name==='Settings')renderSettings();
  else renderPlanned(name);
 }
@@ -418,10 +418,140 @@ function renderContext(){const panel=$('contextBody');if(!panel||!state.details)
 }
 async function act(action,data={}){if(!state.chosen)return;
  try{await api('/api/conversations/'+state.chosen+'/actions','POST',{action,...data});toast('Internal action saved');state.convs=(await api('/api/conversations?limit=50')).data||[];await openConversation(state.chosen)}catch(e){toast(e.message)}}
-function renderContacts(){const rows=state.contacts;
- content(header('Contacts','Real contacts from the independent FSP Connect database')+notice('Contacts and consent must be verified before any future campaign. Import and marketing sends are not enabled.')+
- `<section class="card"><div class="panelhead"><h2>Authorized contacts</h2><span class="pill blue">${rows.length} loaded</span></div>${rows.length?`<div style="overflow:auto"><table class="data-table"><thead><tr><th>Name</th><th>WhatsApp ID</th><th>Language</th><th>Last message</th></tr></thead><tbody>${rows.map(c=>`<tr><td>${h(c.display_name||c.profile_name||'—')}</td><td>${h(c.wa_id)}</td><td>${h(c.language_code||'—')}</td><td>${h(date(c.last_message_at))}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No contacts found. Live Meta messages have not been connected to this staging app.</div>'}</section>`);
+
+let contactEditorId=null;
+function parseContactCsv(source){
+ if(typeof source!=='string'||source.length>100000)throw new Error('CSV must be under 100KB');
+ let quoted=false,field='',row=[],matrix=[];
+ for(let i=0;i<source.length;i++){
+  const ch=source[i];
+  if(ch==='"'){if(quoted&&source[i+1]==='"'){field+='"';i++}else if(quoted||field==='')quoted=!quoted;else throw new Error('Invalid CSV quote')}
+  else if(ch===','&&!quoted){row.push(field);field=''}
+  else if((ch==='\r'||ch==='\n')&&!quoted){if(ch==='\r'&&source[i+1]==='\n')i++;row.push(field);if(row.some(v=>v.trim()))matrix.push(row);row=[];field=''}
+  else field+=ch;
+ }
+ if(quoted)throw new Error('Unclosed CSV quote');
+ row.push(field);if(row.some(v=>v.trim()))matrix.push(row);
+ const heads=(matrix.shift()||[]).map(v=>v.trim().toLowerCase().replace(/^\uFEFF/,''));
+ const wa=heads.indexOf('wa_id');
+ if(wa<0||!matrix.length||matrix.length>100)throw new Error('CSV requires wa_id header and 1–100 contact rows');
+ const name=heads.indexOf('display_name'),language=heads.indexOf('language_code'),tag=heads.indexOf('tags');
+ return matrix.map((r,i)=>{
+  const wa_id=(r[wa]||'').replace(/\D/g,'');
+  if(!/^[1-9][0-9]{5,19}$/.test(wa_id))throw new Error('Invalid number at row '+(i+2));
+  return {wa_id,display_name:name<0?'':r[name]||'',
+   language_code:language<0?'ta':r[language]||'ta',
+   tags:tag<0?[]:(r[tag]||'').split(';').map(v=>v.trim()).filter(Boolean)};
+ });
 }
+async function reloadContacts(){
+ if(state.page!=='Contacts')return;
+ const r=await api('/api/contacts?limit=100');
+ if(state.page!=='Contacts')return;
+ state.contacts=r.data||[];state.contactsHasMore=state.contacts.length===100;renderContacts();
+}
+function renderContacts(){
+ const rows=state.contacts;
+ const canEdit=state.operator?.role==='admin'||state.operator?.role==='manager';
+ const rowHtml=rows.map(c=>'<tr><td>'+h(c.display_name||c.profile_name||'—')+
+  '</td><td>'+h(c.wa_id)+'</td><td>'+h(c.language_code||'—')+
+  '</td><td>'+(c.opted_in?'Opt-in recorded':'Not opted-in')+'</td><td>'+
+  (canEdit?'<button class="btn" type="button" data-edit-contact="'+h(c.id)+'">Edit</button>':'Read only')+
+  '</td></tr>').join('');
+ let html=header('Contacts','Independent WhatsApp Contacts · Marketing Sending OFF')+
+  notice('No contact is imported as opted-in. Consent requires explicit evidence; sending remains disabled.')+
+  '<section class="card"><div class="panelhead"><h2>Authorized Contacts</h2><span class="pill blue">'+rows.length+' loaded</span></div>'+
+  (rows.length?'<div style="overflow:auto"><table class="data-table"><thead><tr><th>Name</th><th>WhatsApp Number</th><th>Language</th><th>Consent</th><th></th></tr></thead><tbody>'+rowHtml+'</tbody></table></div>':'<div class="empty">No authorized contacts found.</div>')+
+  (state.contactsHasMore?'<button type="button" class="btn" id="contactMore">Load more</button>':'')+'</section>';
+ if(canEdit){
+  html+='<section class="card"><h2>Add / Edit Contact</h2><form id="contactForm">'+
+   '<label for="contactWa">WhatsApp Number (with country code)</label><input class="input" id="contactWa" maxlength="20" placeholder="919876543210" required />'+
+   '<label for="contactName">Name</label><input class="input" id="contactName" maxlength="100" />'+
+   '<label for="contactLang">Language</label><select class="input" id="contactLang"><option value="ta">Tamil</option><option value="en">English</option><option value="ta-IN">Tamil India</option><option value="en-IN">English India</option></select>'+
+   '<label for="contactTags">Tags (comma-separated, maximum 12)</label><input class="input" id="contactTags" />'+
+   '<div class="btnrow"><button class="primary" type="submit" id="saveContact">Add Contact</button><button class="btn" type="button" id="clearContact">Clear</button></div>'+
+   '<p id="contactResult" role="status"></p></form>'+
+   '<h3>Explicit Marketing Consent</h3><p id="contactSelection" class="muted">Select a contact above to record consent.</p>'+
+   '<label for="consentSource">Proof source</label><select class="input" id="consentSource"><option value="whatsapp_inbound_request">Customer WhatsApp Request</option><option value="signed_paper">Signed Paper</option><option value="web_form">Web Form</option><option value="direct_request">Direct Request</option></select>'+
+   '<label for="consentEvidence">Evidence reference, 6–160 characters</label><input class="input" id="consentEvidence" maxlength="160" />'+
+   '<label><input type="checkbox" id="confirmConsent" /> I have verified explicit customer consent.</label>'+
+   '<div class="btnrow"><button class="btn" id="contactOptIn" type="button">Record Opt-in</button><button class="btn" id="contactOptOut" type="button">Record Opt-out</button></div>'+
+   '<p id="consentResult" role="status"></p></section>'+
+   '<section class="card"><h2>CSV Import</h2><p>Headers: wa_id,display_name,language_code,tags. Separate tags with semicolons. Maximum 100 rows and 100KB. Duplicate numbers are skipped. No imported customer is opted-in.</p>'+
+   '<input id="contactsCsv" class="input" aria-label="Select contacts CSV" type="file" accept=".csv,text/csv" />'+
+   '<button class="btn" id="importContacts" type="button">Import CSV</button><p id="importReport" role="status"></p></section>';
+ }
+ content(html);
+ const more=$('contactMore');
+ if(more)more.onclick=async()=>{
+  more.disabled=true;
+  try{
+   const response=await api('/api/contacts?limit=100&offset='+state.contacts.length);
+   if(state.page!=='Contacts')return;
+   const newRows=response.data||[];
+   const ids=new Set(state.contacts.map(x=>x.id));
+   state.contacts.push(...newRows.filter(x=>!ids.has(x.id)));
+   state.contactsHasMore=newRows.length===100;
+   renderContacts();
+  }catch(e){toast(e.message)}finally{more.disabled=false}
+ };
+ if(!canEdit)return;
+ const clear=()=>{contactEditorId=null;$('contactWa').disabled=false;$('contactWa').value='';
+  $('contactName').value='';$('contactLang').value='ta';$('contactTags').value='';
+  $('saveContact').textContent='Add Contact';$('contactSelection').textContent='Select a contact above to record consent.';};
+ $('clearContact').onclick=clear;
+ document.querySelectorAll('[data-edit-contact]').forEach(button=>button.onclick=()=>{
+  const c=rows.find(x=>x.id===button.dataset.editContact);
+  if(!c)return;
+  contactEditorId=c.id;$('contactWa').value=c.wa_id;$('contactWa').disabled=true;
+  $('contactName').value=c.display_name||'';
+  $('contactLang').value=c.language_code||'ta';
+  $('contactTags').value=(c.tags||[]).join(', ');
+  $('saveContact').textContent='Save Contact';
+  $('contactSelection').textContent='Selected: '+(c.display_name||c.wa_id)+(c.opted_in?' (opted in)':' (not opted in)');
+  $('consentEvidence').value='';$('confirmConsent').checked=false;
+ });
+ $('contactForm').onsubmit=async event=>{
+  event.preventDefault();const button=$('saveContact');button.disabled=true;
+  try{
+   const body={action:contactEditorId?'update':'create',display_name:$('contactName').value,
+     language_code:$('contactLang').value,tags:$('contactTags').value.split(',').map(v=>v.trim()).filter(Boolean)};
+   if(!contactEditorId)body.wa_id=$('contactWa').value.replace(/\D/g,'');
+   await api(contactEditorId?'/api/contacts/'+contactEditorId:'/api/contacts','POST',body);
+   contactEditorId=null;toast('Contact saved; no marketing message sent');await reloadContacts();
+  }catch(e){$('contactResult').textContent=e.message}finally{button.disabled=false}
+ };
+ $('contactOptIn').onclick=async()=>{
+  if(!contactEditorId)return toast('Select contact first');
+  if(!$('confirmConsent').checked)return toast('Confirm explicit evidence');
+  const b=$('contactOptIn');b.disabled=true;
+  try{await api('/api/contacts/'+contactEditorId,'POST',{action:'record_opt_in',source:$('consentSource').value,proof_ref:$('consentEvidence').value});
+   contactEditorId=null;toast('Consent evidence recorded, sending remains OFF');await reloadContacts();
+  }catch(e){$('consentResult').textContent=e.message}finally{b.disabled=false}
+ };
+ $('contactOptOut').onclick=async()=>{
+  if(!contactEditorId)return toast('Select contact first');
+  if(!window.confirm('Record opt-out for this contact?'))return;
+  const b=$('contactOptOut');b.disabled=true;
+  try{await api('/api/contacts/'+contactEditorId,'POST',{action:'opt_out'});
+   contactEditorId=null;toast('Opt-out recorded');await reloadContacts();
+  }catch(e){$('consentResult').textContent=e.message}finally{b.disabled=false}
+ };
+ $('importContacts').onclick=async()=>{
+  const file=$('contactsCsv').files?.[0];
+  if(!file)return toast('Choose a CSV file first');
+  const button=$('importContacts');button.disabled=true;
+  try{
+   if(file.size>100000)throw new Error('Maximum 100KB');
+   const contacts=parseContactCsv(await file.text());
+   const report=await api('/api/contacts','POST',{action:'import',contacts});
+   $('importReport').textContent='Inserted: '+report.inserted+'; skipped existing: '+report.existing_skipped+
+    '; duplicate rows in file: '+report.duplicate_in_file+'; all new contacts not opted-in.';
+   toast('Import completed. Refresh Contacts to see new records.');
+  }catch(e){$('importReport').textContent=e.message}finally{button.disabled=false}
+ };
+}
+
 const planned={
  'AI Assistant':['Human-approved AI communication','Knowledge-based AI replies require their separate integration and approval. AI auto-replies remain disabled.'],
  'Automation Studio':['Controlled workflow engine','Automation execution is not enabled in staging. Existing workflow definitions will not execute or message customers.'],
