@@ -1,4 +1,5 @@
 import {buildAutoReadFilter} from './auto-read.mjs';
+import {inspectReplyRollout} from './reply-readiness.mjs';
 import {checkMetaConnection} from './meta-connection.mjs';
 import {assessReply,sendGraphText,executeRestrictedReply} from './reply-core.mjs';
 import {resolveFspRoute} from './route.mjs';
@@ -85,6 +86,15 @@ async function getApi(req:Request,path:string,op:any,url:URL):Promise<Response>{
     };
     const result=await checkMetaConnection({config});
     return respond(200,result);
+  }
+  if(path==='/api/reply-readiness'){
+    if(op.role!=='admin')return fail(403,'Administrator access required');
+    return respond(200,inspectReplyRollout({
+      accessToken:Deno.env.get('FSP_META_ACCESS_TOKEN')??'',
+      phoneNumberId:Deno.env.get('FSP_META_PHONE_NUMBER_ID')??'',
+      testRecipient:Deno.env.get('FSP_META_TEST_RECIPIENT')??'',
+      testSendingEnabled:Deno.env.get('FSP_META_SENDING_ENABLED')==='true'
+    }));
   }
   if(path==='/api/health')return respond(200,{authenticated:true,connected:true,sending:false,aiAutoReply:false,broadcast:false});
   if(path==='/api/dashboard'){
