@@ -446,6 +446,11 @@ function renderSettings(){const op=state.operator||{};
     <p>Read-only rollout check. This does not unlock customer messaging.</p>
     <button type="button" class="btn" id="replyReadinessBtn">Check Reply Readiness</button>
     <p id="replyReadinessResult" role="status" aria-live="polite" style="white-space:pre-line;margin-top:12px"></p>
+    <hr style="border:0;border-top:1px solid #e2e8f0;margin:18px 0" />
+    <h3 style="margin:0 0 8px">Manual Reply Operations — Last 24 Hours</h3>
+    <p>Read-only audit counts. No customer content is displayed and no message will be sent.</p>
+    <button type="button" class="btn" id="replyOperationsBtn">Check Reply Operations</button>
+    <p id="replyOperationsResult" role="status" aria-live="polite" style="white-space:pre-line;margin-top:12px"></p>
   </section>` : '') );
  $('settingsLogout').onclick=signOut;
  const readiness=$('replyReadinessBtn');
@@ -467,6 +472,27 @@ function renderSettings(){const op=state.operator||{};
    ].join('\n');
   }catch(e){panel.textContent='Unable to check: '+String(e.message||'Unknown error')}
   finally{readiness.disabled=false}
+ };
+ const operations=$('replyOperationsBtn');
+ if(operations)operations.onclick=async()=>{
+  operations.disabled=true;
+  const panel=$('replyOperationsResult');panel.textContent='Loading secure reply audit…';
+  try{
+   const data=await api('/api/reply-operations');
+   const count=value=>Number.isSafeInteger(Number(value))?Number(value):'—';
+   panel.textContent=[
+    'Mode: Restricted test recipient only',
+    'Attempts: '+count(data.attempts),
+    'Accepted: '+count(data.accepted),
+    'Rate limited: '+count(data.rate_limited),
+    'Uncertain provider results: '+count(data.unknown),
+    'Inbox persistence failures: '+count(data.persist_failed),
+    'Needs manual review: '+count(data.needs_review),
+    'Rate limit database gate: '+(data.database_rate_gate?'Active':'Unknown'),
+    'Production customer sending: OFF'
+   ].join('\\n');
+  }catch(e){panel.textContent='Unable to load operational audit: '+String(e.message||'Connection error')}
+  finally{operations.disabled=false;}
  };
  const checkButton=$('metaCheckBtn');
  if(checkButton){
