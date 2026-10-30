@@ -2,6 +2,7 @@ import {buildAutoReadFilter} from './auto-read.mjs';
 import {buildConversationSearchWhere} from './conversation-query.mjs';
 import {inspectReplyRollout} from './reply-readiness.mjs';
 import {summarizeOperationalAlerts} from './operations-core.mjs';
+import {evaluateProductionReadiness} from './release-gates.mjs';
 import {checkMetaConnection} from './meta-connection.mjs';
 import {assessReply,sendGraphText,executeRestrictedReply} from './reply-core.mjs';
 import {resolveFspRoute} from './route.mjs';
@@ -89,6 +90,32 @@ async function getApi(req:Request,path:string,op:any,url:URL):Promise<Response>{
     };
     const result=await checkMetaConnection({config});
     return respond(200,result);
+  }
+  if(path==='/api/production-gates'){
+    if(op.role!=='admin')return fail(403,'Administrator access required');
+    // All reads below are on this isolated FSP Supabase project only. No messages
+    // are sent and no production switches can be modified by this endpoint.
+    const [operators,inbound,backlog,critical,heartbeat,rateLedger]=await Promise.all([
+      rest('fsp_operators','?select=user_id&active=eq.true&limit=1',{prefer:'count=exact'}),
+      getCount('whatsapp_messages','&direction=eq.inbound'),
+      getCount('fsp_webhook_events','&state=in.(queued,processing,dead)'),
+      rest('fsp_operational_alerts',
+        '?select=alert_key&status=eq.open&severity=eq.critical&limit=1',
+        {prefer:'count=exact'}),
+      rest('fsp_monitor_heartbeat',
+        '?select=last_run_at&monitor_key=eq.stage4_reply_and_webhook&limit=1'),
+      rest('fsp_reply_rate_events','?select=request_id&limit=1')
+    ]);
+    const allowed=Deno.env.get('FSP_META_TEST_RECIPIENT')??'';
+    return respond(200,evaluateProductionReadiness({
+      activeOperators:operators.count,
+      inboundMessages:inbound,
+      queuedOrDeadWebhooks:backlog,
+      openCriticalAlerts:critical.count,
+      monitorLastRun:(heartbeat.data as any[])?.[0]?.last_run_at??null,
+      stagingTestRecipientReady:/^[0-9]{6,20}$/.test(allowed),
+      databaseRateLimitReady:Array.isArray(rateLedger.data)
+    }));
   }
   if(path==='/api/reply-readiness'){
     if(op.role!=='admin')return fail(403,'Administrator access required');
