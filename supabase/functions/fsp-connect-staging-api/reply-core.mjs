@@ -37,10 +37,29 @@ export async function sendGraphText({phoneNumberId,recipient,text,token,fetchImp
 }
 
 /** Durable claim before provider call; never retry automatically after an ambiguous response. */
-export async function executeRestrictedReply({input,claim,send,record,markFailure}) {
+export async function executeRestrictedReply({input,claim,admit,send,record,markFailure}) {
   if (!input?.ok) return input;
   const claimed = await claim(input);
   if (!claimed) return {status:409,error:'Duplicate request id'};
+  // Server-side transactional admission is mandatory. Never send if the
+  // database throttle is unavailable or denies the reservation.
+  let admission;
+  try{
+    if(typeof admit!=='function')throw new Error('Reply admission not configured');
+    admission=await admit(input);
+  }catch{
+    await markFailure(input.requestId,'admission_unavailable').catch(()=>{});
+    return {status:503,error:'Reply safety check unavailable; no message was sent'};
+  }
+  if(!admission || admission.allowed!==true){
+    const blocked=new Set(['operator_minute','operator_hour','conversation_ten_minutes','conversation_cooldown']);
+    const rateLimited=blocked.has(admission?.reason);
+    await markFailure(input.requestId,rateLimited?'rate_limited':'admission_denied').catch(()=>{});
+    if(rateLimited)return {status:429,error:'Manual reply rate limit reached. No message was sent',
+      retryAfterSeconds:Number.isInteger(admission.retry_after_seconds)?
+        Math.min(Math.max(admission.retry_after_seconds,1),3600):60};
+    return {status:403,error:'Reply safety policy denied this request; no message was sent'};
+  }
   let result;
   try {result = await send(input)}
   catch {await markFailure(input.requestId,'unknown').catch(()=>{});return {status:502,error:'Provider response uncertain; check delivery before retrying'};}
