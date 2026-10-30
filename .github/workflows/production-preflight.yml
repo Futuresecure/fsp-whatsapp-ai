@@ -3,7 +3,7 @@ name: FSP Connect 2.1 Production Preflight (Verification Only)
 on:
   workflow_dispatch:
   push:
-    branches: [dev]
+    branches: [dev, release/2.1-production-candidate]
     paths:
       - 'docs/PRODUCTION_RELEASE_PLAN_2.1.md'
       - 'tests/**'
@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: dev
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
