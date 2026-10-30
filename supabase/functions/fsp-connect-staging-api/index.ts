@@ -107,13 +107,15 @@ async function getApi(req:Request,path:string,op:any,url:URL):Promise<Response>{
       const result=await rest('fsp_outbound_requests',base+filter+'&limit=1',{prefer:'count=exact'});
       return result.count??(result.data as any[])?.length??0;
     };
-    const [attempts,accepted,unknown,persistFailed,rateLimited]=await Promise.all([
+    const [attempts,accepted,unknown,persistFailed,rateLimited,providerFailed]=await Promise.all([
       summary(''),summary('&state=eq.accepted'),summary('&state=eq.unknown'),
-      summary('&state=eq.persist_failed'),summary('&error_category=eq.rate_limited')
+      summary('&state=eq.persist_failed'),summary('&error_category=eq.rate_limited'),
+      getCount('whatsapp_messages','&direction=eq.outbound&provider_status=eq.failed&created_at=gte.'+since)
     ]);
     return respond(200,{environment:'staging',mode:'test_recipient_only',
       window_hours:24,attempts,accepted,unknown,persist_failed:persistFailed,
-      rate_limited:rateLimited,needs_review:unknown+persistFailed,
+      provider_failed:providerFailed,rate_limited:rateLimited,
+      needs_review:unknown+persistFailed+providerFailed,
       database_rate_gate:true,production_customer_sending:false});
   }
   if(path==='/api/health')return respond(200,{authenticated:true,connected:true,sending:false,aiAutoReply:false,broadcast:false});
