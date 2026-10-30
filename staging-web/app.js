@@ -150,6 +150,42 @@ function conversationMatches(c,q,filter){
  if(!q)return true;
  return [c.id,c.status,titleFor(c),c.contact_wa_id].some(v=>String(v||'').toLowerCase().includes(q));
 }
+function getInboxPath(offset=0){
+ const params=new URLSearchParams({
+  limit:String(INBOX_PAGE_SIZE),
+  offset:String(Math.max(0,offset)),
+  filter:state.inboxFilter
+ });
+ if(state.inboxQuery.trim())params.set('q',state.inboxQuery.trim());
+ return '/api/conversations?'+params.toString();
+}
+async function loadInboxPage(reset=true){
+ if(state.page!=='Inbox')return;
+ if(!reset && (!state.inboxHasMore||inboxLoadMoreBusy))return;
+ const version=reset?++state.inboxRequestVersion:state.inboxRequestVersion;
+ const offset=reset?0:state.convs.length;
+ if(!reset)inboxLoadMoreBusy=true;
+ try{
+  const result=await api(getInboxPath(offset));
+  if(state.page!=='Inbox'||version!==state.inboxRequestVersion)return;
+  const rows=result.data||[];
+  if(reset)state.convs=rows;
+  else{
+   const ids=new Set(state.convs.map(c=>c.id));
+   state.convs=[...state.convs,...rows.filter(c=>!ids.has(c.id))];
+  }
+  state.inboxTotal=Number.isFinite(result.total)?result.total:null;
+  state.inboxHasMore=result.has_more===true;
+  renderConversationList();
+ }catch(e){
+  if(state.page==='Inbox'&&version===state.inboxRequestVersion)
+   toast('Inbox search: '+String(e.message||'Unable to load'));
+ }finally{
+  if(!reset)inboxLoadMoreBusy=false;
+  const btn=$('convLoadMore');
+  if(btn)btn.disabled=inboxLoadMoreBusy;
+ }
+}
 function renderConversationList(){const node=$('conversationList');if(!node)return;
  node.replaceChildren();
  const q=($('convSearch')?.value||'').trim().toLowerCase();
