@@ -200,7 +200,10 @@ function renderConversationList(){const node=$('conversationList');if(!node)retu
  const q=($('convSearch')?.value||'').trim().toLowerCase();
  const filter=$('convFilter')?.value||'all';
  const items=state.convs.filter(c=>conversationMatches(c,q,filter));
- const count=$('convCount');if(count)count.textContent=items.length+' of '+state.convs.length;
+ const count=$('convCount');
+ if(count)count.textContent='Loaded '+items.length+(state.inboxTotal===null?'':' / '+state.inboxTotal);
+ const more=$('convLoadMore');
+ if(more){more.classList.toggle('hide',!state.inboxHasMore);more.disabled=inboxLoadMoreBusy;}
  if(!items.length){node.innerHTML='<div class="empty">No matching conversations.</div>';return}
  items.forEach(c=>{
   const b=document.createElement('button');b.type='button';
@@ -218,9 +221,21 @@ function renderConversationList(){const node=$('conversationList');if(!node)retu
  });
 }
 async function renderInbox(){content(header('Inbox','Incoming WhatsApp messages · auto refresh every 15 seconds')+
- '<div class="inbox"><section class="convcol"><div class="colhead"><div class="btnrow" style="align-items:center;justify-content:space-between"><h2>Conversations</h2><small class="muted" id="convCount"></small></div><input class="input" id="convSearch" aria-label="Search contacts by name, phone or conversation" placeholder="Search name, mobile, status…" style="margin-top:12px" /><select class="input" id="convFilter" aria-label="Filter conversations" style="margin-top:8px"><option value="all">All conversations</option><option value="unread">Unread only</option><option value="open">Open</option><option value="resolved">Resolved</option></select><div class="muted tiny" id="inboxSync" aria-live="polite" style="margin-top:8px">Auto-refresh: every 15 seconds</div></div><div id="conversationList" class="convlist"></div></section><section class="chatcol"><div class="chathead"><div><b id="chatTitle">Select a conversation</b><div class="muted tiny" id="chatDesc">Private message history</div></div><div class="btnrow"><span class="pill amber">Test replies only</span><button type="button" class="btn" id="detailsBtn">Details</button></div></div><div class="chatbody" id="chatBody"><div class="empty">Select a conversation to view real messages.</div></div><div class="composer" id="replyComposer"><div class="disabledsend">Select an authorized test conversation to reply. Test-recipient allowlist and 24-hour reply window are enforced.</div></div></section><section class="contextcol"><div class="colhead"><h2>Conversation details</h2></div><div class="contextbody" id="contextBody"><p class="muted tiny">Select a conversation.</p></div></section></div>');
- $('convSearch').oninput=renderConversationList;
- $('convFilter').onchange=renderConversationList;
+ '<div class="inbox"><section class="convcol"><div class="colhead"><div class="btnrow" style="align-items:center;justify-content:space-between"><h2>Conversations</h2><small class="muted" id="convCount"></small></div><input class="input" id="convSearch" aria-label="Search contacts by name, phone or conversation" placeholder="Search name, mobile, status…" style="margin-top:12px" /><select class="input" id="convFilter" aria-label="Filter conversations" style="margin-top:8px"><option value="all">All conversations</option><option value="unread">Unread only</option><option value="open">Open</option><option value="resolved">Resolved</option></select><div class="muted tiny" id="inboxSync" aria-live="polite" style="margin-top:8px">Auto-refresh: every 15 seconds</div></div><div id="conversationList" class="convlist"></div><button type="button" class="btn" id="convLoadMore" style="margin:8px 12px">Load more conversations</button></section><section class="chatcol"><div class="chathead"><div><b id="chatTitle">Select a conversation</b><div class="muted tiny" id="chatDesc">Private message history</div></div><div class="btnrow"><span class="pill amber">Test replies only</span><button type="button" class="btn" id="detailsBtn">Details</button></div></div><div class="chatbody" id="chatBody"><div class="empty">Select a conversation to view real messages.</div></div><div class="composer" id="replyComposer"><div class="disabledsend">Select an authorized test conversation to reply. Test-recipient allowlist and 24-hour reply window are enforced.</div></div></section><section class="contextcol"><div class="colhead"><h2>Conversation details</h2></div><div class="contextbody" id="contextBody"><p class="muted tiny">Select a conversation.</p></div></section></div>');
+ $('convSearch').value=state.inboxQuery;
+ $('convFilter').value=state.inboxFilter;
+ $('convSearch').oninput=()=>{
+  state.inboxQuery=$('convSearch').value;
+  ++state.inboxRequestVersion; // cancel pending older searches
+  if(inboxSearchTimer!==null)clearTimeout(inboxSearchTimer);
+  inboxSearchTimer=setTimeout(()=>{void loadInboxPage(true)},300);
+ };
+ $('convFilter').onchange=()=>{
+  state.inboxFilter=$('convFilter').value;
+  if(inboxSearchTimer!==null)clearTimeout(inboxSearchTimer);
+  void loadInboxPage(true);
+ };
+ $('convLoadMore').onclick=()=>{void loadInboxPage(false)};
  $('detailsBtn').onclick=()=>document.querySelector('.contextcol')?.classList.toggle('open');
  renderConversationList();
  if(state.chosen&&state.convs.some(c=>c.id===state.chosen))await openConversation(state.chosen);
