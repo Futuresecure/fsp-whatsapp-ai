@@ -3,6 +3,7 @@ const KEYS=['conversations','contacts','messages','inbound','outbound','sent','d
 function count(value){return Number.isSafeInteger(value)&&value>=0?value:null;}
 export function sanitizeAnalytics(input){
  if(input?.ok!==true||!Array.isArray(input.daily))return {ok:false,error:'Analytics unavailable'};
+ if(!['workspace','assigned'].includes(input.scope))return {ok:false,error:'Invalid reporting scope'};
  const days=Number.isSafeInteger(input.days)&&input.days>=1&&input.days<=90?input.days:null;
  if(!days||input.daily.length!==days)return {ok:false,error:'Invalid report window'};
  const totals={};for(const k of KEYS){totals[k]=count(input[k]);if(totals[k]===null)return {ok:false,error:'Invalid analytics totals'};}
@@ -13,7 +14,7 @@ export function sanitizeAnalytics(input){
   return {day:entry.day,messages,inbound,outbound};
  });
  if(rows.some(x=>!x))return {ok:false,error:'Invalid analytics daily data'};
- return {ok:true,scope:input.scope==='assigned'?'assigned':'workspace',days,
+ return {ok:true,scope:input.scope,days,
   totals,daily:rows,generated_at:typeof input.generated_at==='string'?input.generated_at:null,
   note:'Provider status counts are current outcomes, not cumulative sent-to-read conversions.'};
 }
