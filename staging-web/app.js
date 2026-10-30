@@ -452,6 +452,11 @@ function renderSettings(){const op=state.operator||{};
     <button type="button" class="btn" id="recoveryPreflightBtn">Run Recovery Preflight</button>
     <p id="recoveryPreflightResult" role="status" aria-live="polite" style="white-space:pre-line;margin-top:12px"></p>
     <hr style="border:0;border-top:1px solid #e2e8f0;margin:18px 0" />
+    <h3 style="margin:0 0 8px">Multi-Operator Access Readiness — Stage 6</h3>
+    <p>Shows active operator role counts only. Creating real test logins and validating separate sessions remains a release gate.</p>
+    <button type="button" class="btn" id="operatorCoverageBtn">Check Operator Coverage</button>
+    <p id="operatorCoverageResult" role="status" aria-live="polite" style="white-space:pre-line;margin-top:12px"></p>
+    <hr style="border:0;border-top:1px solid #e2e8f0;margin:18px 0" />
     <h3 style="margin:0 0 8px">Production Manual Reply Readiness</h3>
     <p>Read-only rollout check. This does not unlock customer messaging.</p>
     <button type="button" class="btn" id="replyReadinessBtn">Check Reply Readiness</button>
@@ -468,6 +473,29 @@ function renderSettings(){const op=state.operator||{};
     <p id="alertCheckResult" role="status" aria-live="polite" style="white-space:pre-line;margin-top:12px">Checking internal monitoring…</p>
   </section>` : '') );
  $('settingsLogout').onclick=signOut;
+ const operatorCoverage=$('operatorCoverageBtn');
+ if(operatorCoverage)operatorCoverage.onclick=async()=>{
+  operatorCoverage.disabled=true;
+  const output=$('operatorCoverageResult');
+  output.textContent='Checking operator role coverage…';
+  try{
+   const data=await api('/api/operator-coverage');
+   const roles=data.active_counts||{};
+   const num=v=>Number.isSafeInteger(v)?v:'Not verified';
+   const lines=[
+    'Active Operators: '+num(data.total_active),
+    'Admin: '+num(roles.admin)+' · Manager: '+num(roles.manager),
+    'Agent: '+num(roles.agent)+' · Viewer: '+num(roles.viewer),
+    'Independent multi-operator login QA: NOT VERIFIED',
+    'Role matrix logic: covered by automated tests.',
+    'Production multi-operator approval: NOT READY',
+    'This check cannot create users or change permissions.'
+   ];
+   if(state.page==='Settings')output.textContent=lines.join('\n');
+  }catch(e){
+   if(state.page==='Settings')output.textContent='Operator audit unavailable: '+String(e.message||'Connection error');
+  }finally{if(state.page==='Settings')operatorCoverage.disabled=false;}
+ };
  const recoveryPreflight=$('recoveryPreflightBtn');
  if(recoveryPreflight)recoveryPreflight.onclick=async()=>{
   recoveryPreflight.disabled=true;
