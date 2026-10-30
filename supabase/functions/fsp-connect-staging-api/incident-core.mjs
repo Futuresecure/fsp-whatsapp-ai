@@ -10,7 +10,7 @@ export function assessIncidentReadiness({
  const open=count(openAlerts),critical=count(criticalAlerts),backlog=count(webhookBacklog);
  const metricsKnown=[open,critical,backlog].every(v=>v!==null);
  const urgent=!monitorFresh || !metricsKnown ||
-  critical>0 || backlog>0;
+  open>0 || critical>0 || backlog>0;
  return {
   environment:'staging',
   mode:'internal_only',
