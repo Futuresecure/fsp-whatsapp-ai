@@ -17,6 +17,7 @@ on:
       - 'tests/stage8-contact-management.test.mjs'
       - 'tests/stage8-analytics.test.mjs'
       - 'tests/stage8-meta-templates.test.mjs'
+      - 'tests/stage8-module-readiness.test.mjs'
       - 'supabase/migrations/20261030075354_stage8_secure_analytics_summary.sql'
       - 'supabase/migrations/20261030074611_stage8_contact_explicit_consent_audit.sql'
       - 'supabase/migrations/20261030065915_stage7_readonly_retention_inventory.sql'
@@ -92,6 +93,8 @@ jobs:
         run: node --test tests/stage8-analytics.test.mjs
       - name: Test read-only Meta template inventory and real approval statuses
         run: node --test tests/stage8-meta-templates.test.mjs
+      - name: Verify AI, Automation and Broadcast remain disabled unless approved
+        run: node --test tests/stage8-module-readiness.test.mjs
       - name: Check browser JavaScript syntax
         run: node --check staging-web/app.js
       - name: Verify staging API liveness (no credentials)
@@ -134,6 +137,14 @@ jobs:
           CODE=$(curl -sS --max-time 20 -o /tmp/fsp-stage6-coverage-noauth.json -w '%{http_code}' "$URL?route=%2Fapi%2Foperator-coverage")
           test "$CODE" = "401"
           grep -q '"error":"Authentication required"' /tmp/fsp-stage6-coverage-noauth.json
+      - name: Verify AI, Automation and Broadcast status is protected
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://vzcpzhobtfwhurcsppdl.supabase.co/functions/v1/fsp-connect-staging-api"
+          CODE=$(curl -sS --max-time 20 -o /tmp/fsp-noauth-modules.json -w '%{http_code}' "$URL?route=%2Fapi%2Fmodule-readiness")
+          test "$CODE" = "401"
+          grep -q '"error":"Authentication required"' /tmp/fsp-noauth-modules.json
       - name: Verify template inventory rejects anonymous access
         shell: bash
         run: |
