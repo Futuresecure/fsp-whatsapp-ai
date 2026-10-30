@@ -98,7 +98,22 @@ async function getApi(req:Request,path:string,op:any,url:URL):Promise<Response>{
   }
   if(path==='/api/conversations'){
     const {data}=await rest('whatsapp_conversations','?select=id,contact_id,assigned_to,status,ai_enabled,unread_count,last_message_at,created_at'+scope+'&order=last_message_at.desc.nullslast'+pagination);
-    return respond(200,{data,limit,offset});
+    const conversations=(data as any[])||[];
+    // Only enrich previously authorized conversations; do not expose global contact lists to agents.
+    const contactIds=[...new Set(conversations.map(c=>c.contact_id))].filter(isUUID);
+    let contactsById=new Map<string,any>();
+    if(contactIds.length){
+      const {data:people}=await rest('whatsapp_contacts',
+        '?select=id,wa_id,display_name,profile_name&id=in.('+contactIds.join(',')+')&limit='+contactIds.length);
+      contactsById=new Map(((people as any[])||[]).map(person=>[person.id,person]));
+    }
+    const results=conversations.map(conversation=>{
+      const contact=contactsById.get(conversation.contact_id);
+      return {...conversation,
+        contact_name:contact?.display_name||contact?.profile_name||null,
+        contact_wa_id:contact?.wa_id||null};
+    });
+    return respond(200,{data:results,limit,offset});
   }
   if(path==='/api/contacts'){
     if(allowAll(op)){
