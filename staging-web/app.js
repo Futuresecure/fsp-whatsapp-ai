@@ -198,6 +198,68 @@ function paintChatHistory(scrollToEnd=false){
 function messageSignature(messages){
  return messages.map(m=>[m.id,m.provider_status,m.body].join(':')).join('|');
 }
+async function refreshInboxQuietly(){
+ if(inboxRefreshBusy || state.page!=='Inbox' || !state.operator || document.visibilityState==='hidden')return;
+ inboxRefreshBusy=true;
+ try{
+  const previous=state.convs;
+  const response=await api('/api/conversations?limit=50');
+  if(state.page!=='Inbox')return;
+  const latest=response.data||[];
+  const newUnread=latest.some(c=>{
+   const old=previous.find(x=>x.id===c.id);
+   return Number(c.unread_count)>Number(old?.unread_count||0);
+  });
+  state.convs=latest;
+  renderConversationList();
+  const sync=$('inboxSync');
+  if(sync)sync.textContent='Auto-refresh on · Last checked '+date(new Date().toISOString());
+  const id=state.chosen;
+  if(!id||!latest.some(c=>c.id===id)){
+   if(newUnread)toast('New unread WhatsApp conversation');
+   return;
+  }
+  const before=messageSignature(state.messages);
+  const [d,m]=await Promise.all([
+   api('/api/conversations/'+id),
+   api('/api/conversations/'+id+'/messages?limit=100')
+  ]);
+  if(state.page!=='Inbox'||state.chosen!==id)return;
+  const rows=(m.data||[]).reverse();
+  const oldIds=new Set(state.messages.filter(x=>x.direction==='inbound').map(x=>x.id));
+  const incoming=rows.some(x=>x.direction==='inbound'&&!oldIds.has(x.id));
+  if(messageSignature(rows)!==before){
+   state.messages=rows;
+   paintChatHistory(false); // do not touch a draft in the reply composer
+  }
+  const previousDetail=state.details;
+  state.details=d.data;
+  const note=$('noteText')?.value;
+  if(!previousDetail||previousDetail.status!==d.data.status||
+    previousDetail.unread_count!==d.data.unread_count){
+   renderContext();
+   if(note && $('noteText'))$('noteText').value=note;
+  }
+  if(incoming)toast('New WhatsApp message received');
+  if(Number(d.data.unread_count)>0 && state.operator.role!=='viewer'){
+   const ack=await api('/api/conversations/'+id+'/actions','POST',{
+    action:'auto_mark_read',
+    observed_last_message_at:d.data.last_message_at,
+    observed_unread_count:d.data.unread_count
+   });
+   if(state.page==='Inbox' && state.chosen===id && ack.marked_read){
+    state.details.unread_count=0;
+    const item=state.convs.find(c=>c.id===id);if(item)item.unread_count=0;
+    renderContext();
+    if(note && $('noteText'))$('noteText').value=note;
+    renderConversationList();
+   }
+  }
+ }catch(e){
+  const sync=$('inboxSync');
+  if(sync && state.page==='Inbox')sync.textContent='Auto-refresh retrying · '+String(e.message||'Connection error');
+ }finally{inboxRefreshBusy=false}
+}
 async function openConversation(id){state.chosen=id;renderConversationList();
  $('chatTitle').textContent='Loading conversation…';$('chatBody').innerHTML='<div class="loading">Loading messages…</div>';
  try{
@@ -363,6 +425,9 @@ window.addEventListener('storage',event=>{
  }
 });
 $('menuBtn').onclick=()=>$('appScreen').classList.toggle('expanded');
+document.addEventListener('visibilitychange',()=>{
+ if(document.visibilityState==='visible' && state.page==='Inbox')void refreshInboxQuietly();
+});
 window.addEventListener('unhandledrejection',()=>toast('Request failed. Please refresh.'));
 (async function boot(){
  // Password-recovery tokens must never remain in address bar/history.
