@@ -457,6 +457,16 @@ function renderSettings(){const op=state.operator||{};
     <button type="button" class="btn" id="operatorCoverageBtn">Check Operator Coverage</button>
     <p id="operatorCoverageResult" role="status" aria-live="polite" style="white-space:pre-line;margin-top:12px"></p>
     <hr style="border:0;border-top:1px solid #e2e8f0;margin:18px 0" />
+    <h3 style="margin:0 0 8px">Privacy & Data Retention — Stage 7</h3>
+    <p>Read-only age inventory. No customer data is exported, deleted or archived; retention terms still require approval.</p>
+    <button type="button" class="btn" id="retentionInventoryBtn">Check Retention Inventory</button>
+    <p id="retentionInventoryResult" role="status" aria-live="polite" style="white-space:pre-line;margin-top:12px"></p>
+    <hr style="border:0;border-top:1px solid #e2e8f0;margin:18px 0" />
+    <h3 style="margin:0 0 8px">Incident Response Readiness — Stage 7</h3>
+    <p>Inspect monitor freshness, incidents and escalation readiness without contacting customers or taking recovery actions.</p>
+    <button type="button" class="btn" id="incidentReadinessBtn">Check Incident Readiness</button>
+    <p id="incidentReadinessResult" role="status" aria-live="polite" style="white-space:pre-line;margin-top:12px"></p>
+    <hr style="border:0;border-top:1px solid #e2e8f0;margin:18px 0" />
     <h3 style="margin:0 0 8px">Production Manual Reply Readiness</h3>
     <p>Read-only rollout check. This does not unlock customer messaging.</p>
     <button type="button" class="btn" id="replyReadinessBtn">Check Reply Readiness</button>
@@ -548,6 +558,56 @@ function renderSettings(){const op=state.operator||{};
   }catch(e){
    if(state.page==='Settings')panel.textContent='Release review unavailable: '+String(e.message||'Connection error');
   }finally{if(state.page==='Settings')productionGates.disabled=false}
+ };
+ const retentionButton=$('retentionInventoryBtn');
+ if(retentionButton)retentionButton.onclick=async()=>{
+  retentionButton.disabled=true;
+  const output=$('retentionInventoryResult');
+  output.textContent='Checking private retention inventory…';
+  try{
+   const data=await api('/api/retention-inventory');
+   const lines=[
+    'Inventory: '+(data.inventory_complete?'COUNTS VERIFIED':'INCOMPLETE'),
+    'Retention policy: NOT APPROVED',
+    'Automatic deletion: OFF',
+    'Legal hold and backup-retention reviews: NOT VERIFIED',
+    'Age buckets (counts only):'
+   ];
+   const count=v=>Number.isSafeInteger(v)?v:'Unknown';
+   for(const cat of data.categories||[]){
+    lines.push('• '+cat.label+': '+count(cat.total)+' total; older 30d '+count(cat.older_30_days)+
+       ', 90d '+count(cat.older_90_days)+', 365d '+count(cat.older_365_days));
+   }
+   lines.push('No records were exported, archived or deleted.');
+   if(state.page==='Settings')output.textContent=lines.join('\n');
+  }catch(e){
+   if(state.page==='Settings')output.textContent='Retention inventory unavailable: '+String(e.message||'Connection error');
+  }finally{if(state.page==='Settings')retentionButton.disabled=false;}
+ };
+ const incidentButton=$('incidentReadinessBtn');
+ if(incidentButton)incidentButton.onclick=async()=>{
+  incidentButton.disabled=true;
+  const output=$('incidentReadinessResult');
+  output.textContent='Checking incident response prerequisites…';
+  try{
+   const data=await api('/api/incident-readiness');
+   const lines=[
+    'Assessment: '+String(data.assessment||'Unknown').replaceAll('_',' ').toUpperCase(),
+    'Monitor: '+(data.monitoring_fresh?'ACTIVE':'STALE / UNVERIFIED'),
+    'Open incidents: '+(Number.isSafeInteger(data.open_alert_count)?data.open_alert_count:'Unknown'),
+    'Critical incidents: '+(Number.isSafeInteger(data.critical_alert_count)?data.critical_alert_count:'Unknown'),
+    'Webhook backlog: '+(Number.isSafeInteger(data.queued_or_dead_webhooks)?data.queued_or_dead_webhooks:'Unknown'),
+    'Incident owner: NOT ASSIGNED',
+    'Live response drill: NOT VERIFIED',
+    'External alert notifications: OFF',
+    'Production incident readiness: NOT VERIFIED',
+    'Incident response procedure:'
+   ];
+   for(const step of data.actions||[])lines.push('• '+step);
+   if(state.page==='Settings')output.textContent=lines.join('\n');
+  }catch(e){
+   if(state.page==='Settings')output.textContent='Incident readiness unavailable: '+String(e.message||'Connection error');
+  }finally{if(state.page==='Settings')incidentButton.disabled=false;}
  };
  const readiness=$('replyReadinessBtn');
  if(readiness)readiness.onclick=async()=>{
