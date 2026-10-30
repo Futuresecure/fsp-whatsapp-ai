@@ -451,6 +451,11 @@ function renderSettings(){const op=state.operator||{};
     <p>Read-only audit counts. No customer content is displayed and no message will be sent.</p>
     <button type="button" class="btn" id="replyOperationsBtn">Check Reply Operations</button>
     <p id="replyOperationsResult" role="status" aria-live="polite" style="white-space:pre-line;margin-top:12px"></p>
+    <hr style="border:0;border-top:1px solid #e2e8f0;margin:18px 0" />
+    <h3 style="margin:0 0 8px">Operational Alerts — Internal Monitor</h3>
+    <p>Checks failed replies, delayed delivery and webhook processing every five minutes. No external messages are sent.</p>
+    <button type="button" class="btn" id="alertCheckBtn">Refresh Operational Alerts</button>
+    <p id="alertCheckResult" role="status" aria-live="polite" style="white-space:pre-line;margin-top:12px">Checking internal monitoring…</p>
   </section>` : '') );
  $('settingsLogout').onclick=signOut;
  const readiness=$('replyReadinessBtn');
@@ -496,6 +501,37 @@ function renderSettings(){const op=state.operator||{};
   }catch(e){panel.textContent='Unable to load operational audit: '+String(e.message||'Connection error')}
   finally{operations.disabled=false;}
  };
+ const alertButton=$('alertCheckBtn');
+ const alertPanel=$('alertCheckResult');
+ if(alertButton&&alertPanel){
+  const reloadAlerts=async()=>{
+   alertButton.disabled=true;
+   alertPanel.textContent='Checking internal monitor…';
+   try{
+    const result=await api('/api/operational-alerts');
+    if(state.page!=='Settings')return;
+    const status=result.monitor_fresh?'MONITOR ACTIVE':'MONITOR STALE — check cron job';
+    const lines=[
+     'Monitor: '+status,
+     'Last checked: '+date(result.monitor_last_run),
+     'Open alerts: '+Number(result.open_count||0),
+     'Critical alerts: '+Number(result.critical_count||0)
+    ];
+    if(!result.monitor_fresh)lines.push('WARNING: Freshness verification failed. Do not assume zero incidents.');
+    for(const alert of result.alerts||[]){
+     lines.push('• '+(alert.severity==='critical'?'CRITICAL':'WARNING')+' — '+
+       String(alert.label||'Operational issue')+' (seen '+String(alert.occurrences||1)+' times)');
+    }
+    if(result.monitor_fresh && Number(result.open_count)===0)lines.push('No active operational alerts.');
+    lines.push('No automatic customer messages or external notifications.');
+    alertPanel.textContent=lines.join('\n');
+   }catch(e){
+    if(state.page==='Settings')alertPanel.textContent='Monitoring unavailable: '+String(e.message||'Connection error');
+   }finally{if(state.page==='Settings')alertButton.disabled=false;}
+  };
+  alertButton.onclick=()=>{void reloadAlerts()};
+  void reloadAlerts();
+ }
  const checkButton=$('metaCheckBtn');
  if(checkButton){
    checkButton.onclick=async()=>{
