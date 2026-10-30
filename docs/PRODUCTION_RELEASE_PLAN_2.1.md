@@ -2,9 +2,10 @@
 
 **Prepared:** 30 October 2026  
 **Repository:** `Futuresecure/fsp-whatsapp-ai`  
-**Current working branch:** `dev`  
-**Connected Supabase project:** `vzcpzhobtfwhurcsppdl`  
-**Release decision:** **NO-GO — staging is verified; production is not provisioned or accepted.**
+**Release candidate branch:** `release/2.1-production-candidate`  
+**Staging Supabase project:** `vzcpzhobtfwhurcsppdl` (`ap-south-1`)  
+**Required production region:** India — Mumbai (`ap-south-1`)  
+**Release decision:** **NO-GO — production project creation is blocked by the organization's active Free-project quota.**
 
 This document is the authoritative release gate. Passing CI or a healthy staging project does not, by itself, authorize a production deployment or customer messaging.
 
@@ -13,7 +14,8 @@ This document is the authoritative release gate. Passing CI or a healthy staging
 - This is a standalone WhatsApp AI system.
 - Do not connect it to, migrate, modify, or reuse the existing FSP CRM, website application, or legacy database.
 - Keep the accepted FSP Connect 2.0 offline prototype frozen.
-- The current Supabase project and API are staging. Do not relabel them as production.
+- The current Supabase project is staging. Do not relabel it as production.
+- Production must be a separate Supabase project in India Mumbai (`ap-south-1`).
 - No customer-wide outbound messaging, AI auto-reply, automation execution, scheduled sending, or broadcast is enabled by this release preparation.
 
 ## 2. Verified staging evidence
@@ -30,13 +32,23 @@ The connected staging database was checked on 30 October 2026:
 
 These are staging checks, not production acceptance.
 
-## 3. Mandatory production gates
+## 3. Production provisioning result — 30 October 2026
+
+- Required region `ap-south-1` is supported by the current provisioning interface.
+- The organization-level project quote returned **$0/month** for the new project resource.
+- Project creation was attempted for `fsp-whatsapp-ai-production` in the Future Secure Providers organization and `ap-south-1`.
+- Supabase rejected creation because the organization has reached its maximum of **2 active Free projects**. The existing CRM and WhatsApp staging projects occupy that quota.
+- No existing project was paused, deleted, upgraded, or modified. CRM and staging remain untouched.
+- **Provisioning is blocked until the organization owner chooses a quota remedy:** upgrade the organization plan, or authorize a different organization. The latter would change the requested ownership boundary and must not be done implicitly.
+- The $0/month project quote does not override the organization Free-project quota or establish the cost of upgrading the organization plan. Re-check total plan/project cost before any paid upgrade.
+
+## 4. Mandatory production gates
 
 Every gate must have an evidence link or signed operator record. Unknown is not pass.
 
 | Gate | Required evidence | Current state |
 |---|---|---|
-| Separate production environment | Owner-approved production Supabase project, region, billing confirmation, isolated credentials | BLOCKED |
+| Separate production environment | Owner-approved production Supabase project in `ap-south-1`, isolated credentials | BLOCKED — Free-project quota |
 | Database source reproducibility | Recover and review the three missing foundational migration files; verify clean-room migration replay | BLOCKED |
 | Backup and restore | Encrypted independent backup, retention, restore into a separate isolated project, integrity report | BLOCKED |
 | Supabase Auth hardening | Enable leaked-password protection and confirm password policy in authorized project settings | BLOCKED |
@@ -56,7 +68,7 @@ Every gate must have an evidence link or signed operator record. Unknown is not 
 | Release/rollback | Tagged immutable release, reviewed diff, deployment approval, rollback rehearsal and post-deploy smoke test | BLOCKED |
 | Controlled pilot | Explicitly approved test recipients, written send window and content approval; one-at-a-time pilot evidence | BLOCKED |
 
-## 4. Production secret inventory (never commit or paste into chat)
+## 5. Production secret inventory (never commit or paste into chat)
 
 Store only in the production platform's secret manager:
 - Supabase production URL and server-side service-role/secret key.
@@ -68,21 +80,22 @@ Store only in the production platform's secret manager:
 
 Public/publishable Supabase keys may be used in the browser. Service-role, secret API keys, Meta tokens, app secrets and AI keys must never be embedded in frontend JavaScript, committed to Git, printed in CI logs, or pasted into this chat.
 
-## 5. Release sequence
+## 6. Release sequence
 
-1. Recover authoritative migration sources and complete clean-room schema replay in an isolated disposable environment.
-2. Owner provisions and secures a separate production environment; keep staging unchanged.
-3. Restore a verified encrypted backup into a separate target and attach the restore report.
-4. Configure production Auth, operator roles, MFA policy and access tests.
-5. Configure Meta webhook and run signed inbound test events using an approved test WABA/number.
-6. Complete read-only template inventory, consent capture and opt-out suppression tests.
-7. Complete AI/automation/broadcast dry-runs while provider sends remain disabled.
-8. Complete browser/mobile QA, monitoring, incident and rollback drills.
-9. Run the consolidated production preflight workflow; all required checks must pass.
-10. Obtain owner approval for a restricted test-recipient pilot. Keep bulk broadcast and AI auto-send disabled.
-11. Review pilot evidence, then make a separate explicit decision on any wider outbound capability.
+1. Resolve the Supabase organization project-quota blocker without touching the CRM or staging project.
+2. Recover authoritative migration sources and complete clean-room schema replay in an isolated disposable environment.
+3. Provision the separate production environment in `ap-south-1`; keep staging unchanged.
+4. Restore a verified encrypted backup into a separate target and attach the restore report.
+5. Configure production Auth, operator roles, MFA policy and access tests.
+6. Configure Meta webhook and run signed inbound test events using an approved test WABA/number.
+7. Complete read-only template inventory, consent capture and opt-out suppression tests.
+8. Complete AI/automation/broadcast dry-runs while provider sends remain disabled.
+9. Complete browser/mobile QA, monitoring, incident and rollback drills.
+10. Run the consolidated production preflight workflow; all required checks must pass.
+11. Obtain owner approval for a restricted test-recipient pilot. Keep bulk broadcast and AI auto-send disabled.
+12. Review pilot evidence, then make a separate explicit decision on any wider outbound capability.
 
-## 6. Stop conditions
+## 7. Stop conditions
 
 Immediately stop release progression if:
 - Any secret is found in source, history, logs, browser storage or client responses.
@@ -93,6 +106,6 @@ Immediately stop release progression if:
 - AI produces an unsupported policy/coverage claim or bypasses human handoff.
 - A release workflow targets the existing CRM, website application or legacy database.
 
-## 7. Current release decision
+## 8. Current release decision
 
-**NO-GO.** The repository and staging backend have useful automated QA coverage, but there is no independently verified production environment, clean-room migration history, restore evidence, production operator matrix, or approved production pilot. The production preflight workflow added alongside this document is deliberately non-deploying and non-sending. It is a verification gate, not a deployment action.
+**NO-GO.** The repository and staging backend have useful automated QA coverage, but a separate production database cannot yet be provisioned because the Future Secure Providers organization has reached its two-project Free-plan limit. No existing project was touched. The production preflight workflow is deliberately non-deploying and non-sending; it is a verification gate, not a deployment action.
