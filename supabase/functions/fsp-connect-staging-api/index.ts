@@ -10,6 +10,7 @@ import {summarizeRetentionInventory} from './privacy-core.mjs';
 import {assessIncidentReadiness} from './incident-core.mjs';
 import {validateContact,validateBulkContacts,validateConsentEvidence,allowContactMutation} from './contact-core.mjs';
 import {sanitizeAnalytics} from './analytics-core.mjs';
+import {retrieveMetaTemplates} from './meta-templates.mjs';
 import {checkMetaConnection} from './meta-connection.mjs';
 import {assessReply,sendGraphText,executeRestrictedReply} from './reply-core.mjs';
 import {resolveFspRoute} from './route.mjs';
@@ -220,6 +221,13 @@ async function getApi(req:Request,path:string,op:any,url:URL):Promise<Response>{
       database_rate_gate:true,production_customer_sending:false});
   }
   if(path==='/api/health')return respond(200,{authenticated:true,connected:true,sending:false,aiAutoReply:false,broadcast:false});
+  if(path==='/api/templates'){
+    if(!hasWorkspaceAccess(op))return fail(403,'Template inventory requires Admin/Manager');
+    // WABA identifier is not a secret; token remains on the Edge Function only.
+    const wabaId=Deno.env.get('FSP_META_WABA_ID')||'922433197569331';
+    const token=Deno.env.get('FSP_META_ACCESS_TOKEN')||'';
+    return respond(200,await retrieveMetaTemplates({wabaId,token}));
+  }
   if(path==='/api/analytics'){
     const raw=url.searchParams.get('days')||'30';
     if(!['7','30','90'].includes(raw))return fail(400,'Reporting window must be 7, 30 or 90 days');
