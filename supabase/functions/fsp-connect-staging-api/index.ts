@@ -1,6 +1,7 @@
 import {buildAutoReadFilter} from './auto-read.mjs';
 import {buildConversationSearchWhere} from './conversation-query.mjs';
 import {inspectReplyRollout} from './reply-readiness.mjs';
+import {summarizeOperationalAlerts} from './operations-core.mjs';
 import {checkMetaConnection} from './meta-connection.mjs';
 import {assessReply,sendGraphText,executeRestrictedReply} from './reply-core.mjs';
 import {resolveFspRoute} from './route.mjs';
@@ -96,6 +97,27 @@ async function getApi(req:Request,path:string,op:any,url:URL):Promise<Response>{
       phoneNumberId:Deno.env.get('FSP_META_PHONE_NUMBER_ID')??'',
       testRecipient:Deno.env.get('FSP_META_TEST_RECIPIENT')??'',
       testSendingEnabled:Deno.env.get('FSP_META_SENDING_ENABLED')==='true'
+    }));
+  }
+  if(path==='/api/operational-alerts'){
+    if(op.role!=='admin')return fail(403,'Administrator access required');
+    // Read-only internal notifications: neither messages nor phone numbers returned.
+    // Staleness is surfaced explicitly; a stopped monitor must not look healthy.
+    const [open,critical,heart]=await Promise.all([
+      rest('fsp_operational_alerts',
+        '?select=category,severity,first_seen_at,last_seen_at,occurrences&status=eq.open&order=last_seen_at.desc&limit=25',
+        {prefer:'count=exact'}),
+      rest('fsp_operational_alerts',
+        '?select=alert_key&status=eq.open&severity=eq.critical&limit=1',
+        {prefer:'count=exact'}),
+      rest('fsp_monitor_heartbeat',
+        '?select=last_run_at,open_alerts&monitor_key=eq.stage4_reply_and_webhook&limit=1')
+    ]);
+    return respond(200,summarizeOperationalAlerts({
+      rows:open.data,
+      openCount:open.count,
+      criticalCount:critical.count,
+      heartbeat:(heart.data as any[])?.[0]||null
     }));
   }
   if(path==='/api/reply-operations'){
