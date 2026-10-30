@@ -108,23 +108,33 @@ async function getApi(req:Request,path:string,op:any,url:URL):Promise<Response>{
     return respond(200,{conversations,unread_conversations:unread,contacts,messages,scope:allowAll(op)?'workspace':'assigned',live_sending:false});
   }
   if(path==='/api/conversations'){
-    const {data}=await rest('whatsapp_conversations','?select=id,contact_id,assigned_to,status,ai_enabled,unread_count,last_message_at,created_at'+scope+'&order=last_message_at.desc.nullslast'+pagination);
-    const conversations=(data as any[])||[];
-    // Only enrich previously authorized conversations; do not expose global contact lists to agents.
-    const contactIds=[...new Set(conversations.map(c=>c.contact_id))].filter(isUUID);
-    let contactsById=new Map<string,any>();
-    if(contactIds.length){
-      const {data:people}=await rest('whatsapp_contacts',
-        '?select=id,wa_id,display_name,profile_name&id=in.('+contactIds.join(',')+')&limit='+contactIds.length);
-      contactsById=new Map(((people as any[])||[]).map(person=>[person.id,person]));
+    const qRaw=url.searchParams.get('q')??'';
+    const search=qRaw.trim();
+    const filter=url.searchParams.get('filter')??'all';
+    if(!['all','unread','open','resolved'].includes(filter))return fail(400,'Invalid conversation filter');
+    // Do not concatenate PostgREST syntax from untrusted input.
+    // Only human-readable names/numbers/spaces, never parentheses, wildcards or query operators.
+    if(search.length>60 || (search&&!/^[\\p{L}\\p{N} _+-]+$/u.test(search)))
+      return fail(400,'Search accepts letters, numbers and spaces (maximum 60)');
+    let where=scope;
+    if(filter==='unread')where+='&unread_count=gt.0';
+    if(filter==='open'||filter==='resolved')where+='&status=eq.'+filter;
+    if(search){
+      const criteria=[
+        'contact_name.ilike.*'+search+'*',
+        'contact_wa_id.ilike.*'+search+'*',
+        'status.ilike.*'+search+'*'
+      ];
+      if(isUUID(search))criteria.push('id.eq.'+search);
+      where+='&or='+encodeURIComponent('('+criteria.join(',')+')');
     }
-    const results=conversations.map(conversation=>{
-      const contact=contactsById.get(conversation.contact_id);
-      return {...conversation,
-        contact_name:contact?.display_name||contact?.profile_name||null,
-        contact_wa_id:contact?.wa_id||null};
-    });
-    return respond(200,{data:results,limit,offset});
+    // View is security_invoker and SELECT only for service_role. Enforce operator
+    // assignment scope BEFORE pagination; no unauthorized contact enumeration.
+    const {data,count}=await rest('fsp_conversation_search',
+      '?select=id,contact_id,assigned_to,status,ai_enabled,unread_count,last_message_at,created_at,contact_name,contact_wa_id'+
+      where+'&order=last_message_at.desc.nullslast'+pagination,{prefer:'count=exact'});
+    const results=(data as any[])||[];
+    return respond(200,{data:results,limit,offset,total:count,has_more:count===null?results.length===limit:offset+results.length<count});
   }
   if(path==='/api/contacts'){
     if(allowAll(op)){
