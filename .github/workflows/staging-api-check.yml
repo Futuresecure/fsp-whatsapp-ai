@@ -8,6 +8,8 @@ on:
       - 'tests/stage-b-persistent-login.test.mjs'
       - 'tests/stage-p1-inbox.test.mjs'
       - 'tests/stage3-reply-admission.test.mjs'
+      - 'tests/stage4-ops-monitor.test.mjs'
+      - 'supabase/migrations/20261030060623_stage4_private_operational_monitor.sql'
       - 'tests/stage-p1-conversation-query.test.mjs'
       - 'tests/stage-p1-pagination.test.mjs'
       - 'scripts/history-security-audit.mjs'
@@ -63,6 +65,8 @@ jobs:
         run: node --test tests/stage-p1-pagination.test.mjs
       - name: Scan reachable historical Git blobs for leaked credentials
         run: node scripts/history-security-audit.mjs
+      - name: Test Stage 4 operational monitor privacy and freshness
+        run: node --test tests/stage4-ops-monitor.test.mjs
       - name: Check browser JavaScript syntax
         run: node --check staging-web/app.js
       - name: Verify staging API liveness (no credentials)
@@ -97,6 +101,14 @@ jobs:
           CODE=$(curl -sS --max-time 20 -o /tmp/fsp-search-denied.json -w '%{http_code}' "$URL?route=%2Fapi%2Fconversations&q=customer&filter=all&limit=5")
           test "$CODE" = "401"
           grep -q '"error":"Authentication required"' /tmp/fsp-search-denied.json
+      - name: Verify operational alerts require authentication
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://vzcpzhobtfwhurcsppdl.supabase.co/functions/v1/fsp-connect-staging-api"
+          CODE=$(curl -sS --max-time 20 -o /tmp/fsp-stage4-noauth.json -w '%{http_code}' "$URL?route=%2Fapi%2Foperational-alerts")
+          test "$CODE" = "401"
+          grep -q '"error":"Authentication required"' /tmp/fsp-stage4-noauth.json
       - name: Verify reply operations monitoring requires authentication
         shell: bash
         run: |
