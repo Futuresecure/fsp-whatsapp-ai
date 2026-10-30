@@ -490,7 +490,7 @@ function renderSettings(){const op=state.operator||{};
     'Needs manual review: '+count(data.needs_review),
     'Rate limit database gate: '+(data.database_rate_gate?'Active':'Unknown'),
     'Production customer sending: OFF'
-   ].join('\\n');
+   ].join('\n');
   }catch(e){panel.textContent='Unable to load operational audit: '+String(e.message||'Connection error')}
   finally{operations.disabled=false;}
  };
