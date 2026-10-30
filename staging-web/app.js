@@ -119,9 +119,15 @@ async function navigate(name,force=false){
  if(inboxSearchTimer!==null){clearTimeout(inboxSearchTimer);inboxSearchTimer=null}
  ++state.inboxRequestVersion;
  state.page=name;nav();
- if(name==='Overview'||name==='Analytics'){
+ if(name==='Overview'){
   content(header(name,'Actual FSP Connect database activity · no fictional data')+'<div class="loading">Loading real data…</div>');
   try{state.summary=await api('/api/dashboard');renderOverview(name)}catch(e){renderError(e)}
+ }else if(name==='Analytics'){
+  content(header('Analytics','Privacy-safe message statistics')+'<div class="loading">Loading activity…</div>');
+  try{
+   const report=await api('/api/analytics?days='+analyticsDays);
+   if(state.page==='Analytics')renderAnalytics(report);
+  }catch(e){if(state.page==='Analytics')renderError(e)}
  }else if(name==='Inbox'){
   content(header(name,'Live database conversations · manual test replies restricted')+'<div class="loading">Loading authorized conversations…</div>');
   try{
@@ -147,6 +153,46 @@ function renderOverview(name){const s=state.summary||{};
  `<div class="statgrid">${stat('Conversations',s.conversations,scope)}${stat('Unread conversations',s.unread_conversations,'From Inbox database')}${stat('Contacts',s.contacts,s.contacts===null?'Available to Admin / Manager':'Stored customer contacts')}${stat('Message records',s.messages,s.messages===null?'Available to Admin / Manager':'Provider-backed records')}</div>`+
  `<div class="twocol"><section class="card modulebox"><h2>Communication workspace</h2><p>Read authorised conversations, inspect message history and manage internal operator actions. Manual test replies are restricted to the allowlisted number.</p><button id="openInbox" class="primary">Open Inbox</button></section><section class="card modulebox"><h2>Safety controls</h2><div class="inforow"><span>WhatsApp outgoing</span><b class="pill amber">Test allowlist only</b></div><div class="inforow"><span>AI Auto Reply</span><b class="pill amber">OFF</b></div><div class="inforow"><span>Broadcast / Automation</span><b class="pill amber">OFF</b></div></section></div>`);
  $('openInbox').onclick=()=>navigate('Inbox');
+}
+
+let analyticsDays=30;
+function renderAnalytics(report){
+ if(!report?.ok){renderError(new Error(report?.error||'Analytics unavailable'));return}
+ const t=report.totals||{};
+ const rows=report.daily||[];
+ const max=Math.max(1,...rows.map(x=>x.messages));
+ const bars=rows.map(x=>'<div style="min-width:20px;flex:1;text-align:center" title="'+
+  h(x.day+': '+x.messages+' messages')+'"><div style="height:110px;display:flex;align-items:flex-end;justify-content:center">'+
+  '<div style="height:'+Math.max(2,Math.round(x.messages/max*100))+'px;background:#285bb6;width:12px;border-radius:3px 3px 0 0"></div>'+
+  '</div><small style="font-size:9px">'+h(x.day.slice(5))+'</small></div>').join('');
+ const tableRows=rows.map(x=>'<tr><td>'+h(x.day)+'</td><td>'+x.messages+
+  '</td><td>'+x.inbound+'</td><td>'+x.outbound+'</td></tr>').join('');
+ const html=header('Analytics','Actual WhatsApp message outcomes · UTC daily dates')+
+  notice('Status counts are current outcomes (sent/delivered/read/failed), not cumulative funnel totals. All results use current operator permissions.')+
+  '<section class="card"><div class="btnrow"><label for="analyticsDays">Reporting period</label>'+
+  '<select class="input" id="analyticsDays"><option value="7">7 days</option><option value="30">30 days</option><option value="90">90 days</option></select>'+
+  '<button class="btn" id="analyticsExport" type="button">Export Daily CSV</button></div></section>'+
+  '<div class="statgrid">'+stat('Conversations',t.conversations,report.scope+' scope')+
+  stat('Contacts',t.contacts,'Authorized conversations')+
+  stat('Messages',t.messages,analyticsDays+' days')+
+  stat('Incoming',t.inbound,'From customer')+
+  stat('Outgoing',t.outbound,'From business')+
+  stat('Current Sent',t.sent,'Not yet marked delivered/read')+
+  stat('Current Delivered',t.delivered,'Not yet marked read')+
+  stat('Current Read',t.read,'Latest provider status')+
+  stat('Current Failed',t.failed,'Requires provider review')+'</div>'+
+  '<section class="card"><h2>Daily Message Activity</h2><div style="overflow-x:auto"><div style="display:flex;gap:5px;min-width:'+Math.max(500,rows.length*22)+'px">'+bars+'</div></div></section>'+
+  '<section class="card"><h2>Daily Counts</h2><div style="overflow:auto;max-height:360px"><table class="data-table"><thead><tr><th>UTC Date</th><th>Total</th><th>Inbound</th><th>Outbound</th></tr></thead><tbody>'+
+  tableRows+'</tbody></table></div></section>';
+ content(html);
+ $('analyticsDays').value=String(analyticsDays);
+ $('analyticsDays').onchange=()=>{analyticsDays=Number($('analyticsDays').value);void navigate('Analytics',true)};
+ $('analyticsExport').onclick=()=>{
+  const csv=['day,messages,inbound,outbound',...rows.map(x=>[x.day,x.messages,x.inbound,x.outbound].join(','))].join('\\r\\n');
+  const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  const a=document.createElement('a');a.href=url;a.download='fsp-connect-daily-analytics-'+analyticsDays+'d.csv';
+  document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+ };
 }
 function titleFor(c){
  const d=state.details?.id===c.id?state.details.contact:null;
