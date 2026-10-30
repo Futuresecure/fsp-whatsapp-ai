@@ -9,7 +9,7 @@ on:
       - 'tests/stage-p1-inbox.test.mjs'
       - 'tests/stage3-reply-admission.test.mjs'
       - 'tests/stage4-ops-monitor.test.mjs'
-      - 'supabase/migrations/20261030060623_stage4_private_operational_monitor.sql'
+      - 'supabase/migrations/20261030060606_stage4_private_operational_monitor.sql'
       - 'tests/stage-p1-conversation-query.test.mjs'
       - 'tests/stage-p1-pagination.test.mjs'
       - 'scripts/history-security-audit.mjs'
