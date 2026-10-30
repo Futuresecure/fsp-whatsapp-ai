@@ -5,6 +5,8 @@ on:
     paths:
       - 'supabase/functions/fsp-connect-staging-api/**'
       - 'tests/stage-b2-reply.test.mjs'
+      - 'tests/stage3-reply-admission.test.mjs'
+      - 'supabase/migrations/20261030054839_stage3_durable_manual_reply_rate_gate.sql'
       - '.github/workflows/stage-b2-check.yml'
   workflow_dispatch:
 permissions:
@@ -20,6 +22,8 @@ jobs:
           node-version: '22'
       - name: Test restricted replies without Meta credentials
         run: node --test tests/stage-b2-reply.test.mjs
+      - name: Test mandatory transactional admission and fail-closed replies
+        run: node --test tests/stage3-reply-admission.test.mjs
       - name: Staging API health remains inbound only
         shell: bash
         run: |
