@@ -49,3 +49,14 @@ Audit date: 30 October 2026
 - For emergency test-sending stop, administrator may disable the FSP-specific sending secret in the isolated Supabase project. Never modify unrelated CRM/website secrets.
 - Roll back only the standalone staging frontend and Edge function to a previously verified revision; keep database migrations, message records and audit history.
 - A formal GO decision requires each mandatory release gate to have independent evidence and an explicit owner sign-off. Until then: NO GO.
+
+## Final deployment and QA evidence (30 October 2026)
+- Supabase Edge Function `fsp-connect-staging-api` version 17 is ACTIVE. Existing `fsp-whatsapp-webhook` version 7 remains ACTIVE.
+- GitHub staging website deployment: SUCCESS. Client cache version `20261030-stage5-release-gates`.
+- GitHub Staging API Verification workflow: SUCCESS; Stage 5 release-gate evaluator unit tests 8/8 PASS; no failed test cases.
+- Source credential scanner: 74 currently tracked text files, zero high-confidence findings.
+- Reachable Git history scanner: 176 text blobs, zero unmatched credential-pattern findings (known historical fictional fixture excluded).
+- Current database totals after release: 3 WhatsApp messages, 1 outbound request, 0 webhook backlog, 0 open operational incidents, 1 active admin. The rollout did not transmit new WhatsApp messages.
+- Supabase Security Advisor continues to report 'Leaked Password Protection Disabled' (WARN) and 'RLS Enabled No Policy' (INFO on restricted tables).
+- UI still needs acceptance with a normal logged-in administrator; authenticated production-gate response has not been observed from the user's browser.
+- Full backups, an actual restore drill, real second-operator account testing and production customer messaging remain NOT VERIFIED / OFF, not completed.
