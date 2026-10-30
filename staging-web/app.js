@@ -188,7 +188,7 @@ function renderAnalytics(report){
  $('analyticsDays').value=String(analyticsDays);
  $('analyticsDays').onchange=()=>{analyticsDays=Number($('analyticsDays').value);void navigate('Analytics',true)};
  $('analyticsExport').onclick=()=>{
-  const csv=['day,messages,inbound,outbound',...rows.map(x=>[x.day,x.messages,x.inbound,x.outbound].join(','))].join('\\r\\n');
+  const csv=['day,messages,inbound,outbound',...rows.map(x=>[x.day,x.messages,x.inbound,x.outbound].join(','))].join('\r\n');
   const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   const a=document.createElement('a');a.href=url;a.download='fsp-connect-daily-analytics-'+analyticsDays+'d.csv';
   document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
