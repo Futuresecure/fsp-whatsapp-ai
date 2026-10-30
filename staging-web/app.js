@@ -264,21 +264,26 @@ function messageSignature(messages){
 async function refreshInboxQuietly(){
  if(inboxRefreshBusy || state.page!=='Inbox' || !state.operator || document.visibilityState==='hidden')return;
  inboxRefreshBusy=true;
+ const version=state.inboxRequestVersion;
  try{
   const previous=state.convs;
-  const response=await api('/api/conversations?limit=50');
-  if(state.page!=='Inbox')return;
+  const response=await api(getInboxPath(0));
+  if(state.page!=='Inbox'||version!==state.inboxRequestVersion)return;
   const latest=response.data||[];
   const newUnread=latest.some(c=>{
    const old=previous.find(x=>x.id===c.id);
    return Number(c.unread_count)>Number(old?.unread_count||0);
   });
-  state.convs=latest;
+  // Refresh the newest page, preserving older explicitly loaded pages.
+  const seen=new Set(latest.map(x=>x.id));
+  state.convs=[...latest,...previous.filter(c=>!seen.has(c.id))];
+  state.inboxTotal=Number.isFinite(response.total)?response.total:state.inboxTotal;
+  state.inboxHasMore=state.inboxTotal===null?response.has_more===true:state.convs.length<state.inboxTotal;
   renderConversationList();
   const sync=$('inboxSync');
   if(sync)sync.textContent='Auto-refresh on · Last checked '+date(new Date().toISOString());
   const id=state.chosen;
-  if(!id||!latest.some(c=>c.id===id)){
+  if(!id||!state.convs.some(c=>c.id===id)){
    if(newUnread)toast('New unread WhatsApp conversation');
    return;
   }
@@ -287,7 +292,7 @@ async function refreshInboxQuietly(){
    api('/api/conversations/'+id),
    api('/api/conversations/'+id+'/messages?limit=100')
   ]);
-  if(state.page!=='Inbox'||state.chosen!==id)return;
+  if(state.page!=='Inbox'||state.chosen!==id||version!==state.inboxRequestVersion)return;
   const rows=(m.data||[]).reverse();
   const oldIds=new Set(state.messages.filter(x=>x.direction==='inbound').map(x=>x.id));
   const incoming=rows.some(x=>x.direction==='inbound'&&!oldIds.has(x.id));
