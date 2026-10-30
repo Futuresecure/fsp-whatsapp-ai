@@ -7,6 +7,8 @@ on:
       - 'tests/staging-routes.test.mjs'
       - 'tests/stage-b-persistent-login.test.mjs'
       - 'tests/stage-p1-inbox.test.mjs'
+      - 'tests/stage-p1-conversation-query.test.mjs'
+      - 'scripts/history-security-audit.mjs'
       - 'tests/stage-p1-reply-readiness.test.mjs'
       - 'tests/security-audit.test.mjs'
       - 'tests/staging-api.test.mjs'
@@ -31,6 +33,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: dev
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -50,6 +53,10 @@ jobs:
         run: |
           node --test tests/security-audit.test.mjs
           node scripts/security-audit.mjs
+      - name: Test secured database-wide conversation search
+        run: node --test tests/stage-p1-conversation-query.test.mjs
+      - name: Scan reachable historical Git blobs for leaked credentials
+        run: node scripts/history-security-audit.mjs
       - name: Check browser JavaScript syntax
         run: node --check staging-web/app.js
       - name: Verify staging API liveness (no credentials)
