@@ -13,13 +13,16 @@ const $=id=>document.getElementById(id);
 const h=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const date=s=>s?new Date(s).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'—';
 const roleTag=r=>(r||'viewer').toUpperCase();
-const state={session:null,operator:null,page:'Overview',summary:null,convs:[],contacts:[],messages:[],chosen:null,details:null,operators:[],loading:false,offset:0};
+const state={session:null,operator:null,page:'Overview',summary:null,convs:[],contacts:[],messages:[],chosen:null,details:null,operators:[],loading:false,offset:0,inboxQuery:'',inboxFilter:'all',inboxTotal:null,inboxHasMore:false,inboxRequestVersion:0};
 const sessionName='fsp-connect-21-staging-tab-session';
 let refreshPending=null;
 let sessionEpoch=0;
 const testReplyAttempted=new Set(); // one reply attempt per conversation per page session
 let inboxRefreshTimer=null;
 let inboxRefreshBusy=false;
+let inboxLoadMoreBusy=false;
+let inboxSearchTimer=null;
+const INBOX_PAGE_SIZE=50;
 const INBOX_POLL_INTERVAL_MS=15000;
 function stopInboxAutoRefresh(){
  if(inboxRefreshTimer!==null){clearInterval(inboxRefreshTimer);inboxRefreshTimer=null;}
