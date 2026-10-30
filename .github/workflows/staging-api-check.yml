@@ -6,6 +6,11 @@ on:
     paths:
       - 'tests/staging-routes.test.mjs'
       - 'tests/stage-b-persistent-login.test.mjs'
+      - 'tests/stage-p1-inbox.test.mjs'
+      - 'tests/stage-p1-reply-readiness.test.mjs'
+      - 'tests/security-audit.test.mjs'
+      - 'scripts/security-audit.mjs'
+      - 'staging-web/style.css'
       - 'tests/stage-b-auto-read.test.mjs'
       - 'tests/stage-b-auto-read-ui.test.mjs'
       - 'tests/stage-b3-meta-connection.test.mjs'
@@ -38,6 +43,12 @@ jobs:
         run: node --test tests/stage-b-auto-read-ui.test.mjs
       - name: Test remembered login and logout across browser restarts
         run: node --test tests/stage-b-persistent-login.test.mjs
+      - name: Test Priority 1 inbox search, polling and read-only production readiness
+        run: node --test tests/stage-p1-inbox.test.mjs tests/stage-p1-reply-readiness.test.mjs
+      - name: Test secret scanner and scan tracked repository source
+        run: |
+          node --test tests/security-audit.test.mjs
+          node scripts/security-audit.mjs
       - name: Check browser JavaScript syntax
         run: node --check staging-web/app.js
       - name: Verify staging API liveness (no credentials)
