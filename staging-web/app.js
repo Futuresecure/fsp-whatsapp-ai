@@ -116,13 +116,22 @@ function content(html){$('mainContent').innerHTML=html;const b=$('refreshBtn');i
 async function navigate(name,force=false){
  if(!state.operator)return;
  stopInboxAutoRefresh();
+ if(inboxSearchTimer!==null){clearTimeout(inboxSearchTimer);inboxSearchTimer=null}
+ ++state.inboxRequestVersion;
  state.page=name;nav();
  if(name==='Overview'||name==='Analytics'){
   content(header(name,'Actual FSP Connect database activity · no fictional data')+'<div class="loading">Loading real data…</div>');
   try{state.summary=await api('/api/dashboard');renderOverview(name)}catch(e){renderError(e)}
  }else if(name==='Inbox'){
   content(header(name,'Live database conversations · manual test replies restricted')+'<div class="loading">Loading authorized conversations…</div>');
-  try{state.convs=(await api('/api/conversations?limit=50')).data||[];await renderInbox()}catch(e){renderError(e)}
+  try{
+   const result=await api(getInboxPath(0));
+   if(state.page!=='Inbox')return;
+   state.convs=result.data||[];
+   state.inboxTotal=Number.isFinite(result.total)?result.total:null;
+   state.inboxHasMore=result.has_more===true;
+   await renderInbox();
+  }catch(e){if(state.page==='Inbox')renderError(e)}
  }else if(name==='Contacts'){
   content(header(name,'Contacts visible to your operator role')+'<div class="loading">Loading contacts…</div>');
   try{state.contacts=(await api('/api/contacts?limit=50')).data||[];renderContacts()}catch(e){renderError(e)}
