@@ -13,6 +13,8 @@ on:
       - 'tests/stage6-operator-matrix.test.mjs'
       - 'tests/stage6-recovery.test.mjs'
       - 'tests/stage6-operator-coverage.test.mjs'
+      - 'tests/stage7-privacy-incident.test.mjs'
+      - 'supabase/migrations/20261030065915_stage7_readonly_retention_inventory.sql'
       - 'supabase/migrations/20261030063553_stage6_monitoring_explicit_deny_client_rls.sql'
       - 'supabase/migrations/20261030063844_stage6_read_only_recovery_integrity_preflight.sql'
       - 'supabase/migrations/20261030060606_stage4_private_operational_monitor.sql'
@@ -77,6 +79,8 @@ jobs:
         run: node --test tests/stage5-production-gates.test.mjs
       - name: Test Stage 6 operator roles, coverage and recovery preflight
         run: node --test tests/stage6-operator-matrix.test.mjs tests/stage6-recovery.test.mjs tests/stage6-operator-coverage.test.mjs
+      - name: Verify Stage 7 privacy, retention and incident response safety
+        run: node --test tests/stage7-privacy-incident.test.mjs
       - name: Check browser JavaScript syntax
         run: node --check staging-web/app.js
       - name: Verify staging API liveness (no credentials)
@@ -119,6 +123,16 @@ jobs:
           CODE=$(curl -sS --max-time 20 -o /tmp/fsp-stage6-coverage-noauth.json -w '%{http_code}' "$URL?route=%2Fapi%2Foperator-coverage")
           test "$CODE" = "401"
           grep -q '"error":"Authentication required"' /tmp/fsp-stage6-coverage-noauth.json
+      - name: Verify Stage 7 privacy and incident checks reject unauthenticated requests
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://vzcpzhobtfwhurcsppdl.supabase.co/functions/v1/fsp-connect-staging-api"
+          for ROUTE in retention-inventory incident-readiness; do
+            CODE=$(curl -sS --max-time 20 -o /tmp/fsp-stage7-noauth.json -w '%{http_code}' "$URL?route=%2Fapi%2F$ROUTE")
+            test "$CODE" = "401"
+            grep -q '"error":"Authentication required"' /tmp/fsp-stage7-noauth.json
+          done
       - name: Verify Stage 6 recovery diagnostics reject anonymous requests
         shell: bash
         run: |
