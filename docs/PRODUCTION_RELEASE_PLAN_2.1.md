@@ -39,6 +39,10 @@ These are staging checks, not production acceptance.
 - Project creation was attempted for `fsp-whatsapp-ai-production` in the Future Secure Providers organization and `ap-south-1`.
 - Supabase rejected creation because the organization has reached its maximum of **2 active Free projects**. The existing CRM and WhatsApp staging projects occupy that quota.
 - No existing project was paused, deleted, upgraded, or modified. CRM and staging remain untouched.
+- The owner explicitly declined upgrading the Future Secure Providers organization to Pro. No paid plan change will be attempted.
+- The connected Supabase account currently exposes only the Future Secure Providers organization; no second organization is available as a no-cost destination.
+- Under the current organization quota, no separate production project can be created in the required Mumbai region without changing the plan or ownership boundary. Reusing the staging project, pausing the CRM/staging project, or silently moving ownership is not an acceptable production workaround.
+- Production provisioning remains blocked unless an eligible separate Mumbai project slot becomes available without a paid upgrade, or the owner later changes this decision.
 - **Provisioning is blocked until the organization owner chooses a quota remedy:** upgrade the organization plan, or authorize a different organization. The latter would change the requested ownership boundary and must not be done implicitly.
 - The $0/month project quote does not override the organization Free-project quota or establish the cost of upgrading the organization plan. Re-check total plan/project cost before any paid upgrade.
 - Supabase's current billing FAQ gives an example of **3 default Micro projects on one Pro organization at about $45/month**: $25 Pro subscription + $30 compute - $10 compute credits. This is an estimate, not a binding quote; actual usage, compute size, taxes and billing changes may alter the invoice. See [Supabase billing FAQ](https://supabase.com/docs/guides/platform/billing-faq) and [pricing](https://supabase.com/pricing).
@@ -110,4 +114,4 @@ Immediately stop release progression if:
 
 ## 8. Current release decision
 
-**NO-GO.** The repository and staging backend have useful automated QA coverage, but a separate production database cannot yet be provisioned because the Future Secure Providers organization has reached its two-project Free-plan limit. No existing project was touched. The production preflight workflow is deliberately non-deploying and non-sending; it is a verification gate, not a deployment action.
+**NO-GO.** The repository and staging backend have useful automated QA coverage, but a separate production database cannot yet be provisioned because the Future Secure Providers organization has reached its two-project Free-plan limit and the owner has declined a Pro upgrade. No existing project was touched. The production preflight workflow is deliberately non-deploying and non-sending; it is a verification gate, not a deployment action.
