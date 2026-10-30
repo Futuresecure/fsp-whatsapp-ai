@@ -114,7 +114,7 @@ async function getApi(req:Request,path:string,op:any,url:URL):Promise<Response>{
     if(!['all','unread','open','resolved'].includes(filter))return fail(400,'Invalid conversation filter');
     // Do not concatenate PostgREST syntax from untrusted input.
     // Only human-readable names/numbers/spaces, never parentheses, wildcards or query operators.
-    if(search.length>60 || (search&&!/^[\\p{L}\\p{N} _+-]+$/u.test(search)))
+    if(search.length>60 || (search&&!/^[\p{L}\p{M}\p{N} _+-]+$/u.test(search)))
       return fail(400,'Search accepts letters, numbers and spaces (maximum 60)');
     let where=scope;
     if(filter==='unread')where+='&unread_count=gt.0';
