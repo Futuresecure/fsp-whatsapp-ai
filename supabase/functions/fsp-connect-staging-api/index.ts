@@ -3,6 +3,7 @@ import {buildConversationSearchWhere} from './conversation-query.mjs';
 import {inspectReplyRollout} from './reply-readiness.mjs';
 import {summarizeOperationalAlerts} from './operations-core.mjs';
 import {evaluateProductionReadiness} from './release-gates.mjs';
+import {isActiveOperator,hasWorkspaceAccess,canViewConversation,canPerformConversationAction,canInspectAdminSettings,visibleConversationScope} from './operator-permissions.mjs';
 import {checkMetaConnection} from './meta-connection.mjs';
 import {assessReply,sendGraphText,executeRestrictedReply} from './reply-core.mjs';
 import {resolveFspRoute} from './route.mjs';
@@ -61,14 +62,14 @@ async function getAuthOperator(req:Request){
   if(!isUUID(user.id) || user.is_anonymous===true)return {status:401,error:'Authentication required'};
   const {data}=await rest('fsp_operators','?select=user_id,role,active,display_name&user_id=eq.'+escapeQuery(user.id)+'&limit=1');
   const op=(data as any[])?.[0];
-  if(!op?.active || !['admin','manager','agent','viewer'].includes(op.role))return {status:403,error:'Operator access not activated'};
+  if(!isActiveOperator(op))return {status:403,error:'Operator access not activated'};
   return {user,op};
 }
-function allowAll(op:any){return op.role==='admin'||op.role==='manager'}
+function allowAll(op:any){return hasWorkspaceAccess(op)}
 async function conversationById(op:any,id:string){
   const {data}=await rest('whatsapp_conversations','?select=id,contact_id,assigned_to,status,ai_enabled,unread_count,last_message_at,created_at,closed_at&id=eq.'+escapeQuery(id)+'&limit=1');
   const c=(data as any[])?.[0];
-  return c && (allowAll(op)||c.assigned_to===op.user_id)?c:null;
+  return c && canViewConversation(op,c)?c:null;
 }
 async function getCount(table:string,filter=''){
   const res=await callSupabase<unknown[]>('/rest/v1/'+table+'?select=id'+filter+'&limit=1',{prefer:'count=exact'});
@@ -77,11 +78,12 @@ async function getCount(table:string,filter=''){
 async function getApi(req:Request,path:string,op:any,url:URL):Promise<Response>{
   const limit=n(url.searchParams.get('limit'),100);
   const offset=Math.min(100000,Math.max(0,Number(url.searchParams.get('offset'))||0));
-  const scope=allowAll(op)?'':'&assigned_to=eq.'+escapeQuery(op.user_id);
+  const scope=visibleConversationScope(op);
+  if(scope===null)return fail(403,'Operator access not activated');
   const pagination='&limit='+limit+'&offset='+offset;
   if(path==='/api/me')return respond(200,{id:op.user_id,role:op.role,name:op.display_name||'Operator'});
   if(path==='/api/meta/connection-check'){
-    if(op.role!=='admin')return fail(403,'Administrator access required');
+    if(!canInspectAdminSettings(op))return fail(403,'Administrator access required');
     const config={
       phoneNumberId:Deno.env.get('FSP_META_PHONE_NUMBER_ID')??'',
       accessToken:Deno.env.get('FSP_META_ACCESS_TOKEN')??'',
@@ -92,7 +94,7 @@ async function getApi(req:Request,path:string,op:any,url:URL):Promise<Response>{
     return respond(200,result);
   }
   if(path==='/api/production-gates'){
-    if(op.role!=='admin')return fail(403,'Administrator access required');
+    if(!canInspectAdminSettings(op))return fail(403,'Administrator access required');
     // All reads below are on this isolated FSP Supabase project only. No messages
     // are sent and no production switches can be modified by this endpoint.
     const [operators,inbound,backlog,critical,heartbeat,rateLedger]=await Promise.all([
@@ -118,7 +120,7 @@ async function getApi(req:Request,path:string,op:any,url:URL):Promise<Response>{
     }));
   }
   if(path==='/api/reply-readiness'){
-    if(op.role!=='admin')return fail(403,'Administrator access required');
+    if(!canInspectAdminSettings(op))return fail(403,'Administrator access required');
     return respond(200,inspectReplyRollout({
       accessToken:Deno.env.get('FSP_META_ACCESS_TOKEN')??'',
       phoneNumberId:Deno.env.get('FSP_META_PHONE_NUMBER_ID')??'',
@@ -127,7 +129,7 @@ async function getApi(req:Request,path:string,op:any,url:URL):Promise<Response>{
     }));
   }
   if(path==='/api/operational-alerts'){
-    if(op.role!=='admin')return fail(403,'Administrator access required');
+    if(!canInspectAdminSettings(op))return fail(403,'Administrator access required');
     // Read-only internal notifications: neither messages nor phone numbers returned.
     // Staleness is surfaced explicitly; a stopped monitor must not look healthy.
     const [open,critical,heart]=await Promise.all([
@@ -148,7 +150,7 @@ async function getApi(req:Request,path:string,op:any,url:URL):Promise<Response>{
     }));
   }
   if(path==='/api/reply-operations'){
-    if(op.role!=='admin')return fail(403,'Administrator access required');
+    if(!canInspectAdminSettings(op))return fail(403,'Administrator access required');
     // Counts only; never return phone numbers, message text, or access tokens.
     const since=escapeQuery(new Date(Date.now()-24*60*60*1000).toISOString());
     const base='?select=request_id&created_at=gte.'+since;
@@ -244,6 +246,7 @@ async function postRestrictedReply(req:Request,conversationId:string,op:any):Pro
   if(!data||typeof data!=='object'||Array.isArray(data))return fail(400,'Invalid body');
   const conversation=await conversationById(op,conversationId);
   if(!conversation)return fail(404,'Conversation not found');
+  if(!canPerformConversationAction(op,conversation,'reply'))return fail(403,'Insufficient permission');
   const {data:contacts}=await rest('whatsapp_contacts',
     '?select=wa_id&id=eq.'+escapeQuery(conversation.contact_id)+'&limit=1');
   const recipient=(contacts as any[])?.[0]?.wa_id;
@@ -327,6 +330,7 @@ async function postApi(req:Request,path:string,op:any):Promise<Response>{
   if(!body||typeof body!=='object'||Array.isArray(body))return fail(400,'Invalid request');
   const action=body.action;
   if(!['mark_read','auto_mark_read','resolve','reopen','takeover','pause_ai','assign','note'].includes(action))return fail(400,'Action not available in staging');
+  if(!canPerformConversationAction(op,conv,action))return fail(403,'Insufficient permission');
   if(action==='auto_mark_read'){
     // Never clear new inbound messages that arrived while the conversation was opening.
     // Only the specific unread count and last-message snapshot observed by the operator
