@@ -627,10 +627,51 @@ const planned={
  'Templates':['Meta template synchronisation','Approved WhatsApp templates will be retrieved after Meta staging connection is verified. No approval statuses are simulated.'],
  'Broadcast':['Opt-in and campaign safeguards','Bulk WhatsApp sending is OFF. No recipients are queued and no campaigns are dispatched.'],
 };
-function renderPlanned(name){const [title,desc]=planned[name]||['Module pending','Production integration is not enabled'];
- content(header(name,'Module visible for staged rollout · restricted functionality')+notice('This is a staging workspace. The module is intentionally disabled until its provider integration, permissions and end-to-end tests pass.')+
- `<div class="tipgrid"><div class="card tip"><b>${h(title)}</b><p>${h(desc)}</p><span class="pill amber">Not enabled</span></div><div class="card tip"><b>Security</b><p>Account permissions are enforced by the FSP Connect backend. No simulated approvals or deliveries.</p><span class="pill green">Protected</span></div><div class="card tip"><b>Next integration</b><p>Meta WhatsApp test number, webhook, provider templates, and controlled test traffic.</p><span class="pill">Stage B follow-up</span></div></div>`);
+
+async function renderPlanned(name){
+ const label=planned[name]||['Feature pending','Not enabled'];
+ content(header(name,'Live readiness and production safety controls')+
+  '<div class="loading">Checking current module readiness…</div>');
+ try{
+  const result=await api('/api/module-readiness');
+  if(state.page!==name)return;
+  let details='';
+  if(name==='AI Assistant'){
+   const ai=result.ai_assistant||{};
+   details='<div class="inforow"><span>Saved configurations</span><b>'+h(ai.configurations)+'</b></div>'+
+    '<div class="inforow"><span>Model connection verified</span><b>NO</b></div>'+
+    '<div class="inforow"><span>Approved knowledge base</span><b>NOT VERIFIED</b></div>'+
+    '<div class="inforow"><span>Human-reviewed suggestions</span><b>OFF</b></div>'+
+    '<div class="inforow"><span>AI auto reply</span><b>OFF</b></div>';
+  }else if(name==='Automation Studio'){
+   const flows=result.automation||{};
+   details='<div class="inforow"><span>Database flow records</span><b>'+h(flows.saved_flows)+'</b></div>'+
+    '<div class="inforow"><span>Active flow records</span><b>'+h(flows.active_database_records)+'</b></div>'+
+    '<div class="inforow"><span>Automatic execution engine</span><b>OFF</b></div>'+
+    '<div class="inforow"><span>Automatic customer messages</span><b>OFF</b></div>'+
+    '<p><a href="../preview/chatbot-studio.html" target="_blank" rel="noopener noreferrer">Open offline flow design preview</a> (not live)</p>';
+  }else if(name==='Broadcast'){
+   const b=result.broadcast||{};
+   details='<div class="inforow"><span>Total contacts</span><b>'+h(b.contacts)+'</b></div>'+
+    '<div class="inforow"><span>Recorded marketing opt-in</span><b>'+h(b.recorded_opt_in_contacts)+'</b></div>'+
+    '<div class="inforow"><span>Approved template eligibility</span><b>NOT VERIFIED</b></div>'+
+    '<div class="inforow"><span>Manual / Scheduled bulk sender</span><b>OFF</b></div>'+
+    '<p>Import and review contacts first. Do not send campaigns until template approval, consent and provider limits are verified.</p>';
+  }
+  content(header(name,'Actual database readiness · no simulated delivery or approval')+
+   notice('STAGING: This module cannot send or schedule customer messages. Provider integration and acceptance gates remain pending.')+
+   '<section class="card"><h2>'+h(label[0])+'</h2><p>'+h(label[1])+'</p>'+
+   details+'<p class="muted">Current release status: NOT READY FOR PRODUCTION</p></section>'+
+   '<section class="card"><h2>Next acceptance requirements</h2>'+
+   '<p>Required: approved integrations and documentation, operator access tests, backup/restore evidence and controlled pilot approval. No sending will be enabled automatically.</p>'+
+   '<button type="button" class="btn" id="openModuleSettings">Open Security Settings</button></section>');
+  const settings=$('openModuleSettings');
+  if(settings)settings.onclick=()=>navigate('Settings');
+ }catch(e){
+  if(state.page===name)renderError(e);
+ }
 }
+
 function renderSettings(){const op=state.operator||{};
  content(header('Settings','Workspace access and staging operational controls')+
  `<div class="twocol"><section class="card modulebox"><h2>Signed-in operator</h2><div class="inforow"><span>Name</span><b>${h(op.name)}</b></div><div class="inforow"><span>Role</span><b>${h(roleTag(op.role))}</b></div><div class="inforow"><span>Account</span><b>${h(op.id)}</b></div><button class="btn danger" type="button" id="settingsLogout">Sign out</button></section><section class="card modulebox"><h2>Staging safety</h2><div class="inforow"><span>Unrestricted WhatsApp sending</span><b class="pill amber">Disabled</b></div><div class="inforow"><span>Broadcast</span><b class="pill amber">Disabled</b></div><div class="inforow"><span>AI Auto Reply</span><b class="pill amber">Disabled</b></div><div class="inforow"><span>Automation</span><b class="pill amber">Disabled</b></div></section></div>`+
