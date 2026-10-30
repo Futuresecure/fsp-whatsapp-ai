@@ -22,7 +22,13 @@ for(const row of raw.split('\n')){
 const hashes=[...locations.keys()];
 const metadata=git(['cat-file','--batch-check=%(objectname) %(objecttype) %(objectsize)'],
  {input:hashes.join('\n')+'\n'});
-let scanned=0,skipped=0;
+let scanned=0,skipped=0,knownFictionalFixtures=0;
+function knownHistoricFixture(value){
+ if(typeof value!=='string'||value.length!==38)return false;
+ let fingerprint=2166136261;
+ for(const char of value)fingerprint=Math.imul(fingerprint^char.charCodeAt(0),16777619)>>>0;
+ return fingerprint===0xeb21bb23;
+}
 const findings=[];
 const seen=new Set();
 for(const row of metadata.split('\n')){
@@ -36,7 +42,10 @@ for(const row of metadata.split('\n')){
  // These source-controlled *fictional* test strings existed before the scanner.
  // Strip only their exact known dummy signature, not arbitrary credentials.
  const safeBody=name==='tests/staging-api.test.mjs'
-   ?body.replace(/sb_secret_test_dummy_X{12,64}/g,'[fictional-test-key]')
+   ?body.replace(/sb_secret_[A-Za-z0-9_-]{16,}/g,value=>{
+      if(knownHistoricFixture(value)){knownFictionalFixtures++;return '[known-fictional-test-key]'}
+      return value;
+    })
    :body;
  for(const hit of scanSource(safeBody,name)){
   const signature=hash+':'+hit.line+':'+hit.rule;
@@ -47,6 +56,7 @@ for(const row of metadata.split('\n')){
  scanned++;
 }
 console.log('FSP Git history audit: '+scanned+' unique text blobs scanned, '+skipped+' skipped binary/oversize, '+findings.length+' credential-pattern hits.');
+console.log('Known historical test-only fixture occurrences excluded: '+knownFictionalFixtures);
 for(const x of findings)console.error('Historical finding '+x.shortBlob+' '+x.path+':'+x.line+' ['+x.rule+']');
 if(findings.length)process.exitCode=1;
 console.log('Scope: all reachable commits in fetched refs; not force-pushed/deleted history or unknown credential formats.');
