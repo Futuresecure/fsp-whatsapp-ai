@@ -11,6 +11,7 @@ import {assessIncidentReadiness} from './incident-core.mjs';
 import {validateContact,validateBulkContacts,validateConsentEvidence,allowContactMutation} from './contact-core.mjs';
 import {sanitizeAnalytics} from './analytics-core.mjs';
 import {retrieveMetaTemplates} from './meta-templates.mjs';
+import {summarizeModuleReadiness} from './module-readiness.mjs';
 import {checkMetaConnection} from './meta-connection.mjs';
 import {assessReply,sendGraphText,executeRestrictedReply} from './reply-core.mjs';
 import {resolveFspRoute} from './route.mjs';
@@ -221,6 +222,21 @@ async function getApi(req:Request,path:string,op:any,url:URL):Promise<Response>{
       database_rate_gate:true,production_customer_sending:false});
   }
   if(path==='/api/health')return respond(200,{authenticated:true,connected:true,sending:false,aiAutoReply:false,broadcast:false});
+  if(path==='/api/module-readiness'){
+    if(!hasWorkspaceAccess(op))return fail(403,'Module readiness requires Admin/Manager');
+    const [aiSettings,aiOn,drafts,active,consented,contacts]=await Promise.all([
+      getCount('ai_agent_settings'),
+      getCount('ai_agent_settings','&enabled=eq.true'),
+      getCount('chatbot_flows'),
+      getCount('chatbot_flows','&status=eq.active'),
+      getCount('whatsapp_contacts','&opted_in=eq.true'),
+      getCount('whatsapp_contacts')
+    ]);
+    return respond(200,summarizeModuleReadiness({
+      aiSettings,aiConfigsEnabled:aiOn,flowDrafts:drafts,activeFlows:active,
+      optedInContacts:consented,allContacts:contacts
+    }));
+  }
   if(path==='/api/templates'){
     if(!hasWorkspaceAccess(op))return fail(403,'Template inventory requires Admin/Manager');
     // WABA identifier is not a secret; token remains on the Edge Function only.
