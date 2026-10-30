@@ -466,6 +466,7 @@ function renderSettings(){const op=state.operator||{};
     'Test-only sending: '+(gates.restricted_test_sending?'Ready':'Not ready'),
     '24-hour window: '+(gates.incoming_24h_window_enforced?'Enforced':'Pending'),
     'Duplicate prevention: '+(gates.idempotent_claim_before_send?'Enabled':'Pending'),
+    'Staging rate gate: '+(gates.staging_durable_rate_gate_implemented?'Implemented':'Pending'),
     'Production customer replies: NOT ENABLED',
     'Release blockers:',
     ...(result.blockers||[]).map(b=>'• '+b)
