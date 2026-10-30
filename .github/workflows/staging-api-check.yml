@@ -8,6 +8,7 @@ on:
       - 'tests/stage-b-persistent-login.test.mjs'
       - 'tests/stage-p1-inbox.test.mjs'
       - 'tests/stage-p1-conversation-query.test.mjs'
+      - 'tests/stage-p1-pagination.test.mjs'
       - 'scripts/history-security-audit.mjs'
       - 'tests/stage-p1-reply-readiness.test.mjs'
       - 'tests/security-audit.test.mjs'
@@ -55,6 +56,8 @@ jobs:
           node scripts/security-audit.mjs
       - name: Test secured database-wide conversation search
         run: node --test tests/stage-p1-conversation-query.test.mjs
+      - name: Test remote Inbox pagination and query cancellation
+        run: node --test tests/stage-p1-pagination.test.mjs
       - name: Scan reachable historical Git blobs for leaked credentials
         run: node scripts/history-security-audit.mjs
       - name: Check browser JavaScript syntax
