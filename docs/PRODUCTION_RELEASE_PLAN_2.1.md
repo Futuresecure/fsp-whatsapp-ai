@@ -41,6 +41,8 @@ These are staging checks, not production acceptance.
 - No existing project was paused, deleted, upgraded, or modified. CRM and staging remain untouched.
 - **Provisioning is blocked until the organization owner chooses a quota remedy:** upgrade the organization plan, or authorize a different organization. The latter would change the requested ownership boundary and must not be done implicitly.
 - The $0/month project quote does not override the organization Free-project quota or establish the cost of upgrading the organization plan. Re-check total plan/project cost before any paid upgrade.
+- Supabase's current billing FAQ gives an example of **3 default Micro projects on one Pro organization at about $45/month**: $25 Pro subscription + $30 compute - $10 compute credits. This is an estimate, not a binding quote; actual usage, compute size, taxes and billing changes may alter the invoice. See [Supabase billing FAQ](https://supabase.com/docs/guides/platform/billing-faq) and [pricing](https://supabase.com/pricing).
+- Because upgrading the existing organization applies the paid plan to all projects in that organization, it would affect the CRM and staging projects' billing plan too. No upgrade was made.
 
 ## 4. Mandatory production gates
 
