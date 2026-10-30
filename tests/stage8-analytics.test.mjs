@@ -34,7 +34,8 @@ test('current provider status counts need not represent cumulative conversion fu
  const x=sanitizeAnalytics({...valid,sent:0,delivered:0,read:1});
  assert.equal(x.ok,true);assert.equal(x.totals.read,1);
 });
-test('fallback does not grant workspace scope if backend says assigned',()=>{
+test('invalid reporting scope must fail closed rather than elevate to workspace',()=>{
  const x=sanitizeAnalytics({...valid,scope:'untrusted'});
- assert.equal(x.ok,true);assert.equal(x.scope,'workspace');
+ assert.equal(x.ok,false);
+ assert.equal(x.error,'Invalid reporting scope');
 });
