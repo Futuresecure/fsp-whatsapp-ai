@@ -1,4 +1,5 @@
 import {buildAutoReadFilter} from './auto-read.mjs';
+import {buildConversationSearchWhere} from './conversation-query.mjs';
 import {inspectReplyRollout} from './reply-readiness.mjs';
 import {checkMetaConnection} from './meta-connection.mjs';
 import {assessReply,sendGraphText,executeRestrictedReply} from './reply-core.mjs';
@@ -108,26 +109,12 @@ async function getApi(req:Request,path:string,op:any,url:URL):Promise<Response>{
     return respond(200,{conversations,unread_conversations:unread,contacts,messages,scope:allowAll(op)?'workspace':'assigned',live_sending:false});
   }
   if(path==='/api/conversations'){
-    const qRaw=url.searchParams.get('q')??'';
-    const search=qRaw.trim();
-    const filter=url.searchParams.get('filter')??'all';
-    if(!['all','unread','open','resolved'].includes(filter))return fail(400,'Invalid conversation filter');
-    // Do not concatenate PostgREST syntax from untrusted input.
-    // Only human-readable names/numbers/spaces, never parentheses, wildcards or query operators.
-    if(search.length>60 || (search&&!/^[\p{L}\p{M}\p{N} _+-]+$/u.test(search)))
-      return fail(400,'Search accepts letters, numbers and spaces (maximum 60)');
-    let where=scope;
-    if(filter==='unread')where+='&unread_count=gt.0';
-    if(filter==='open'||filter==='resolved')where+='&status=eq.'+filter;
-    if(search){
-      const criteria=[
-        'contact_name.ilike.*'+search+'*',
-        'contact_wa_id.ilike.*'+search+'*',
-        'status.ilike.*'+search+'*'
-      ];
-      if(isUUID(search))criteria.push('id.eq.'+search);
-      where+='&or='+encodeURIComponent('('+criteria.join(',')+')');
-    }
+    const parsed=buildConversationSearchWhere({
+      query:url.searchParams.get('q')??'',
+      filter:url.searchParams.get('filter')??'all'
+    });
+    if(!parsed.ok)return fail(400,parsed.error||'Invalid search');
+    const where=scope+parsed.where;
     // View is security_invoker and SELECT only for service_role. Enforce operator
     // assignment scope BEFORE pagination; no unauthorized contact enumeration.
     const {data,count}=await rest('fsp_conversation_search',
