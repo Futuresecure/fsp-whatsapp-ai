@@ -15,7 +15,8 @@ const secretKeys = (() => { try { return JSON.parse(Deno.env.get('SUPABASE_SECRE
 const ADMIN_KEY = secretKeys.default || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const PUBLISHABLE = (() => { try { return JSON.parse(Deno.env.get('SUPABASE_PUBLISHABLE_KEYS') ?? '{}').default; } catch { return ''; } })() || Deno.env.get('SUPABASE_ANON_KEY') || '';
 const CORS: Record<string,string> = {
-  'access-control-allow-origin':'*',
+  'access-control-allow-origin':'https://futuresecureproviders.com',
+  'vary':'Origin',
   'access-control-allow-methods':'GET, POST, OPTIONS',
   'access-control-allow-headers':'authorization, apikey, content-type, x-client-info',
   'access-control-max-age':'600',
