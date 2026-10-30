@@ -5,6 +5,7 @@ import {summarizeOperationalAlerts} from './operations-core.mjs';
 import {evaluateProductionReadiness} from './release-gates.mjs';
 import {isActiveOperator,hasWorkspaceAccess,canViewConversation,canPerformConversationAction,canInspectAdminSettings,visibleConversationScope} from './operator-permissions.mjs';
 import {summarizeRecoveryPreflight} from './recovery-core.mjs';
+import {summarizeOperatorCoverage} from './operator-readiness.mjs';
 import {checkMetaConnection} from './meta-connection.mjs';
 import {assessReply,sendGraphText,executeRestrictedReply} from './reply-core.mjs';
 import {resolveFspRoute} from './route.mjs';
@@ -93,6 +94,17 @@ async function getApi(req:Request,path:string,op:any,url:URL):Promise<Response>{
     };
     const result=await checkMetaConnection({config});
     return respond(200,result);
+  }
+  if(path==='/api/operator-coverage'){
+    if(!canInspectAdminSettings(op))return fail(403,'Administrator access required');
+    const roles=['admin','manager','agent','viewer'];
+    const result=await Promise.all(roles.map(role=>rest(
+      'fsp_operators',
+      '?select=user_id&active=eq.true&role=eq.'+role+'&limit=1',
+      {prefer:'count=exact'}
+    )));
+    const counts=Object.fromEntries(roles.map((role,i)=>[role,result[i].count]));
+    return respond(200,summarizeOperatorCoverage(counts));
   }
   if(path==='/api/recovery-preflight'){
     if(!canInspectAdminSettings(op))return fail(403,'Administrator access required');
