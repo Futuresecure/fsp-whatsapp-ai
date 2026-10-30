@@ -373,8 +373,33 @@ function renderSettings(){const op=state.operator||{};
        No WhatsApp message will be sent.</p>
     <button type="button" class="btn" id="metaCheckBtn">Check Meta Connection</button>
     <p id="metaCheckResult" role="status" aria-live="polite" style="white-space:pre-line;margin-top:12px"></p>
+    <hr style="border:0;border-top:1px solid #e2e8f0;margin:18px 0" />
+    <h3 style="margin:0 0 8px">Production Manual Reply Readiness</h3>
+    <p>Read-only rollout check. This does not unlock customer messaging.</p>
+    <button type="button" class="btn" id="replyReadinessBtn">Check Reply Readiness</button>
+    <p id="replyReadinessResult" role="status" aria-live="polite" style="white-space:pre-line;margin-top:12px"></p>
   </section>` : '') );
  $('settingsLogout').onclick=signOut;
+ const readiness=$('replyReadinessBtn');
+ if(readiness)readiness.onclick=async()=>{
+  readiness.disabled=true;
+  const panel=$('replyReadinessResult');
+  panel.textContent='Checking rollout gates…';
+  try{
+   const result=await api('/api/reply-readiness');
+   const gates=result.checks||{};
+   panel.textContent=[
+    'Mode: '+String(result.mode||'unknown'),
+    'Test-only sending: '+(gates.restricted_test_sending?'Ready':'Not ready'),
+    '24-hour window: '+(gates.incoming_24h_window_enforced?'Enforced':'Pending'),
+    'Duplicate prevention: '+(gates.idempotent_claim_before_send?'Enabled':'Pending'),
+    'Production customer replies: NOT ENABLED',
+    'Release blockers:',
+    ...(result.blockers||[]).map(b=>'• '+b)
+   ].join('\n');
+  }catch(e){panel.textContent='Unable to check: '+String(e.message||'Unknown error')}
+  finally{readiness.disabled=false}
+ };
  const checkButton=$('metaCheckBtn');
  if(checkButton){
    checkButton.onclick=async()=>{
