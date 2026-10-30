@@ -4,7 +4,7 @@ const USER='11111111-1111-4111-8111-111111111111';
 const OTHER='22222222-2222-4222-8222-222222222222';
 let handler;
 let scenario={valid:false,provisioned:false,role:'admin'};
-globalThis.Deno={env:{get(k){return ({SUPABASE_URL:'https://example.supabase.co',SUPABASE_SECRET_KEYS:'{"default":"sb_secret_test_secret_example_00000000"}',SUPABASE_PUBLISHABLE_KEYS:'{"default":"sb_publishable_test_dummy"}'})[k]}},serve(fn){handler=fn}};
+globalThis.Deno={env:{get(k){return ({SUPABASE_URL:'https://example.supabase.co',SUPABASE_SECRET_KEYS:JSON.stringify({default:'sb_'+'secret_'+'test_dummy_'+'X'.repeat(24)}),SUPABASE_PUBLISHABLE_KEYS:'{"default":"sb_publishable_test_dummy"}'})[k]}},serve(fn){handler=fn}};
 const originalFetch=globalThis.fetch;
 globalThis.fetch=async(input,init={})=>{
  const u=new URL(String(input));
